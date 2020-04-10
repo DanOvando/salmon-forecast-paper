@@ -1,0 +1,2 @@
+# salmon-forecast-paper
+Materials to produce results for the tentatively titled "Evaluating the Potential of Computer-Age Statistical Methods in Ecological Forcasting"
