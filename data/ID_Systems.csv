@@ -1,0 +1,18 @@
+﻿SystemID,DistrictID,System,StreamID,DistrictID_alternate
+1,325,Wood,300,1
+2,325,Nushagak,700,1
+3,325,Igushik,100,1
+4,324,Kvichak,100,2
+5,324,Naknek,600,2
+6,324,Branch,500,2
+7,322,Egegik,100,3
+8,321,Ugashik,100,4
+9,326,Togiak,600,5
+10,,Chignik,,6
+11,325,Nuyakuk,800,1
+12,321,Catch,0,0
+18,322,Catch,0,0
+19,324,Catch,0,0
+20,325,Catch,0,0
+21,326,Catch,0,0
+9999,,Not recorded,0,0
