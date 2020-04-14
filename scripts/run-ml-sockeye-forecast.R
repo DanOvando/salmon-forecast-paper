@@ -35,11 +35,13 @@ if (!dir.exists(file.path(results_dir,"figs"))) {
 
 # set options -------------------------------------------------------------
 
-fit_forests <- TRUE
+fit_parsnip_models <- TRUE
 
-run_query_erddap <-  TRUE
+fit_rnn_models <- TRUE
 
-run_next_forecast <- TRUE
+run_query_erddap <-  FALSE
+
+run_next_forecast <- FALSE
 
 stride <- 4 #stride for errdaap data
 
@@ -191,7 +193,7 @@ top_age_groups <- top_age_groups %>%
 
 # load environmental data -------------------------------------------------
 
-bbay <- sf::st_read(here("data","salmon_districts.kml"))
+# bbay <- sf::st_read(here("data","salmon_districts.kml"))
 # bbay_ll <- sf::st_coordinates(bbay) %>%
 #   as_tibble() %>%
 #   rename(long = X, lat = Y) %>%
@@ -578,7 +580,7 @@ looframe <-
 
 future::plan(future::multiprocess, workers = cores)
 
-if (fit_forests == TRUE){
+if (fit_parsnip_models == TRUE){
   
   
         a <- Sys.time()
@@ -586,7 +588,7 @@ if (fit_forests == TRUE){
         loo_preds <- looframe %>%
           ungroup() %>% 
           # filter(model_type == "boost_tree") %>%
-          # sample_n(16) %>%
+          sample_n(6) %>%
           mutate(pred = future_pmap(
             list(
             dep_age = dep_age,
@@ -614,15 +616,243 @@ if (fit_forests == TRUE){
           ))
         Sys.time() - a
       
- 
-
-      # 
-  write_rds(loo_preds, path = file.path(results_dir, "forest_loo_preds.rds"))
+  write_rds(loo_preds, path = file.path(results_dir, "parsnip_loo_preds.rds"))
   
 } else {
-  loo_preds <- readr::read_rds(file.path(results_dir, "forest_loo_preds.rds"))
+  loo_preds <- readr::read_rds(file.path(results_dir, "parsnip_loo_preds.rds"))
 }
 
+
+
+
+# run recurrent neural nets -----------------------------------------------
+
+if (fit_rnn_models == TRUE) {
+  
+  rnn_experiments <- purrr::cross_df(
+    list(
+      engineering = c("scale"),
+      delta_dep = c(FALSE),
+      form = c("cohort"),
+      dep_age = top_age_groups,
+      units = c(4),
+      dropout = c(0.1),
+      batch_size = c(2)
+    )
+  )
+  
+  lookback <- str_split(rnn_experiments$dep_age,"\\.", simplify = TRUE) %>% 
+    data.frame(stringsAsFactors = FALSE) %>% 
+    map_df(as.numeric) %>% 
+    rowSums() - 2
+  
+  rnn_experiments$lookback <- lookback
+  
+  # experiments <- purrr::cross_df(
+  #   list(
+  #     engineering = c("range", 'yeo_johnson', 'scale'),
+  #     delta_dep = c(FALSE, TRUE),
+  #     form = c("age"),
+  #     dep_age = top_age_groups,
+  #     lookback = c(1),
+  #     units = c(64)
+  #   )
+  # )
+  
+  
+  # set up potential experiments
+  # experiments <- purrr::cross_df(
+  #   list(
+  #     engineering = c('scale'),
+  #     delta_dep = c(TRUE),
+  #     form = c("age"),
+  #     dep_age = top_age_groups,
+  #     lookback = c(3),
+  #     units = c(16)
+  #   )
+  # )
+  
+  # prepare data for each experiment
+  rnn_experiments <- rnn_experiments %>%
+    mutate(
+      pdata = pmap(
+        list(dep_age = dep_age,
+             engineering = engineering,
+             delta_dep = delta_dep),
+        prepare_data,
+        test_year = first_year,
+        data = data,
+        shuffle = FALSE,
+        scalar = scalar,
+        val_prop = 0.05,
+        ages = "cohort"
+      )
+    )
+  
+  # fit each experiment
+  rnn_experiments <- rnn_experiments %>%
+    mutate(fit = pmap(
+      list(
+        prepped_data = pdata,
+        lookback = lookback,
+        units = units,
+        batch_size = batch_size,
+        dropout = dropout
+      ),
+      fit_rnn,
+      epochs = 250,
+      early_stop = FALSE,
+      model = "rnn"
+    ))
+  
+  # run predictions
+  rnn_experiments <- rnn_experiments %>%
+    mutate(predictions = pmap(
+      list(
+        prepped_data = pdata,
+        fit = fit,
+        return_delta = delta_dep
+      ),
+      predict_returns
+    ))
+  
+  
+  rnn_experiments <- rnn_experiments %>% 
+    mutate(smoothed_val_loss =  map(fit, c("history", "metrics", "val_loss")) %>% map(~smooth(.x)))
+  
+  rnn_experiments <- rnn_experiments %>%
+    mutate(val_loss = map_dbl(smoothed_val_loss,min)) %>%
+    mutate(epochs =  map_dbl(smoothed_val_loss,~ last(which(.x == min(.x)))))
+  
+  
+  write_rds(rnn_experiments, path = file.path(results_dir, "rnn_experiments.rds"))
+  
+# } else {
+#   rnn_experiments <- readr::read_rds(file.path(results_dir, "rnn_experiments.rds"))
+#   
+# }
+# select models -----------------------------------------------------------
+
+message("finished rnn experiments")
+
+# experiments$fit[[1]]$history %>%
+#   plot()
+
+# experiments %>%
+#   ggplot(aes(val_loss)) +
+#   geom_histogram() +
+#   facet_grid(dep_age ~ delta_dep)
+
+
+# select the "best" model configurations from the experiments in terms of
+# hyperparameters, by both delta and absolute estimators, by RMSE in the validation period
+best_rnn_models <- rnn_experiments %>%
+  group_by(dep_age, delta_dep) %>%
+  filter(val_loss == min(val_loss)) %>%
+  select(-fit, -pdata,-smoothed_val_loss)
+
+# best_models$delta_dep <- FALSE
+# 
+# best_models$units <- 64
+# 
+# best_models$epochs <- 1000
+# 
+# best_models$batch_size <- 1000
+
+a = best_rnn_models %>%
+  unnest(cols = predictions) %>%
+  # filter(ret_yr < 2000) %>% 
+  ggplot() +
+  geom_point(aes(ret_yr, ret, color = data_use)) +
+  geom_line(aes(ret_yr, pred, color = data_use)) +
+  facet_wrap(dep_age ~ system , scales = "free_y")
+
+# complete_preds %>%
+#   ggplot() +
+#   geom_point(aes(ret_yr, ret)) +
+#   geom_line(aes(ret_yr, pred)) +
+#   facet_wrap(~ system, scales = "free_y")
+
+
+# fit best models -----------------------------------------------------------
+# once the 'best' model is selected, go through and fit models 
+# using the selected hyperparameters in a leave-one-out style (fit through 2000, predict 2001, fit through 2001, predict 2002, etc. )
+
+  rnn_looframe <-
+    purrr::cross_df(list(
+      dep_age = unique(best_rnn_models$dep_age),
+      test_year = first_year:last_year
+    ))
+  
+  rnn_loo_preds <- best_rnn_models %>%
+    left_join(looframe, by = "dep_age") %>%
+    # filter(delta_dep == FALSE) %>% 
+    mutate(
+      prepped_data = pmap(
+        list(
+          dep_age = dep_age,
+          engineering = engineering,
+          test_year = test_year,
+          delta_dep = delta_dep
+        ),
+        ages = "cohort",
+        prepare_data,
+        data = data,
+        shuffle = FALSE,
+        scalar = scalar,
+        val_prop = 0
+      )
+    ) %>% 
+    ungroup() %>% 
+    mutate(fit_name = paste0("depage_",dep_age,"-","year_",test_year,"-delta_",delta_dep))
+  
+  
+  rnn_loo_preds <- rnn_loo_preds %>%
+    slice(1) %>%
+    mutate(fit = pmap(
+      list(
+        prepped_data = prepped_data,
+        lookback = lookback,
+        units = units,
+        epochs = epochs,
+        save_name = fit_name,
+        batch_size = batch_size,
+        dropout = dropout
+      ),
+      fit_rnn,
+      save_dir = results_dir,
+      save_fit = TRUE,
+      early_stop = FALSE,
+      model = "rnn",
+      pred = FALSE
+    ))
+  
+  
+  # test <- load_model_hdf5(file.path(results_dir,"fits", "depage_2.2-year_2000-delta_FALSE.h5"))
+rnn_loo_preds <- rnn_loo_preds %>%
+  mutate(predictions = pmap(
+    list(
+      prepped_data = prepped_data,
+      fit = fit,
+      return_delta = FALSE
+    ),
+    predict_returns
+  ))
+
+write_rds(rnn_loo_preds, file.path(results_dir, "rnn_loo_preds.rds"))
+
+} else{
+  
+  rnn_loo_preds <- read_rds(file.path(results_dir, "rnn_loo_preds.rds"))
+
+}
+
+
+# close fit rnn models
+# loo_preds <- loo_preds %>%
+#   filter(map_lgl(map(pred, "error"), is.null)) %>%
+#   mutate(pred = map(pred,c("result","salmon_data")))
+# process results --------------------------------------------
 
 olp <- loo_preds
 
@@ -635,12 +865,6 @@ loo_preds <- loo_preds %>%
   # filter(map_lgl(map(pred, "error"), is.null)) %>%
   mutate(pred = map(pred,c("salmon_data")))
 
-
-
-# loo_preds <- loo_preds %>%
-#   filter(map_lgl(map(pred, "error"), is.null)) %>%
-#   mutate(pred = map(pred,c("result","salmon_data")))
-# process leave-one-out analysis --------------------------------------------
 
 rids <- rlang::parse_exprs(colnames(looframe)[!colnames(looframe) %in% c("dep_age","test_year")])
 
@@ -942,34 +1166,34 @@ observed %>%
 
 # load in fri forecasts
 
-source(here("R","get-published-fcst.R"))  # Returns published UW-FRI Forecasts by year
-source(here("R","get-currys-1step-preds.R")) # Reads in 1-step ahead predictions from all UW-FRI current model types
-
-# Published UW-FRI preseason forecasts
-published.fcsts <- get_published_fcst(dir.pf=here(file.path("data","preseasonForecast.dat")),
-                                      dir.ids=here(file.path("data","ID_Systems.csv")), 
-                                      years=2000:last_year) %>% 
-  rename(forecast = FRIfcst) %>% 
-  mutate(model = "fri_forecast")
-
-
-# UW-FRI DLM Forecast 1963+ Linear
-dlm.63.linear.fcsts <- get_currys_1step_preds(dir.retro.output=file.path("Retrospective-Analysis","Output", "Group"),
-                                              name.output="group.dlm_marss.rds",
-                                              transform="linear",
-                                              start.year=1963) %>% 
-  rename(forecast = fcst) %>% 
-  mutate(model = "dlm_forecast")
+# source(here("R","get-published-fcst.R"))  # Returns published UW-FRI Forecasts by year
+# source(here("R","get-currys-1step-preds.R")) # Reads in 1-step ahead predictions from all UW-FRI current model types
+# 
+# # Published UW-FRI preseason forecasts
+# published.fcsts <- get_published_fcst(dir.pf=here(file.path("data","preseasonForecast.dat")),
+#                                       dir.ids=here(file.path("data","ID_Systems.csv")), 
+#                                       years=2000:last_year) %>% 
+#   rename(forecast = FRIfcst) %>% 
+#   mutate(model = "fri_forecast")
+# 
+# 
+# # UW-FRI DLM Forecast 1963+ Linear
+# dlm.63.linear.fcsts <- get_currys_1step_preds(dir.retro.output=file.path("Retrospective-Analysis","Output", "Group"),
+#                                               name.output="group.dlm_marss.rds",
+#                                               transform="linear",
+#                                               start.year=1963) %>% 
+#   rename(forecast = fcst) %>% 
+#   mutate(model = "dlm_forecast")
 
 # aggregate fri forecasts
 
-alternative_forecasts <- published.fcsts %>%
-  bind_rows(dlm.63.linear.fcsts[, colnames(dlm.63.linear.fcsts) %in% colnames(published.fcsts)]) %>%
-  janitor::clean_names() %>%
-  mutate(age_group = paste(fw_age, o_age, sep = '.')) %>%
-  filter(age_group %in% top_age_groups,
-         system %in% unique(top_systems$system)) %>% 
-  select(ret_yr, system, age_group, model, forecast)
+# alternative_forecasts <- published.fcsts %>%
+#   bind_rows(dlm.63.linear.fcsts[, colnames(dlm.63.linear.fcsts) %in% colnames(published.fcsts)]) %>%
+#   janitor::clean_names() %>%
+#   mutate(age_group = paste(fw_age, o_age, sep = '.')) %>%
+#   filter(age_group %in% top_age_groups,
+#          system %in% unique(top_systems$system)) %>% 
+#   select(ret_yr, system, age_group, model, forecast)
 
 # create naive forecasts
 
@@ -998,7 +1222,7 @@ ml_forecast <- loo_results %>%
 
 forecasts <- ml_forecast %>% 
   bind_rows(simple_forecast) %>% 
-  bind_rows(alternative_forecasts) %>% 
+  # bind_rows(alternative_forecasts) %>% 
   left_join(observed, by = c("ret_yr","age_group","system")) %>% 
   na.omit() %>% 
   mutate(observed =  observed / 1000,

@@ -15,6 +15,7 @@ prep_run <- function(results_name,
   library(ggsci)
   library(ggrepel)
   library(gt)
+  library(tensorflow)
   
   # create directory for result batch and prodide description if desired
   
