@@ -24,7 +24,7 @@ prep_run <- function(results_name,
   
   if (!dir.exists(results_dir)) {
     
-    dir.create(results_dir)
+    dir.create(results_dir, recursive = TRUE)
     
     write(results_description,
           file.path(results_dir, "result-description.txt"))
