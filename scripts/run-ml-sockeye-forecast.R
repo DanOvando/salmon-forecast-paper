@@ -37,17 +37,17 @@ if (!dir.exists(file.path(results_dir,"figs"))) {
 
 fit_parsnip_models <- TRUE
 
-fit_rnn_models <- TRUE
+fit_rnn_models <- FALSE
 
-run_query_erddap <-  FALSE
+run_query_erddap <-  TRUE
 
-run_next_forecast <- FALSE
+run_next_forecast <- TRUE
 
 stride <- 4 #stride for errdaap data
 
 weight_returns <- FALSE
 
-cores <- 6
+cores <- 8
 
 trees <- 500
 
@@ -59,7 +59,7 @@ min_year <- 1965 # only include data greater than or equal this year
 
 age_groups <- 4 #number of top age groups to include
 
-first_year <- 2015 # the first year splitting the test and training data
+first_year <- 2000 # the first year splitting the test and training data
 
 scalar <- 10000
   #10000 # number do divide the total returns by just to get the data a bit closer to the -1 to 1 range
@@ -588,7 +588,7 @@ if (fit_parsnip_models == TRUE){
         loo_preds <- looframe %>%
           ungroup() %>% 
           # filter(model_type == "boost_tree") %>%
-          sample_n(6) %>%
+          # sample_n(6) %>%
           mutate(pred = future_pmap(
             list(
             dep_age = dep_age,
@@ -635,9 +635,9 @@ if (fit_rnn_models == TRUE) {
       delta_dep = c(FALSE),
       form = c("cohort"),
       dep_age = top_age_groups,
-      units = c(4),
-      dropout = c(0.1),
-      batch_size = c(2)
+      units = c(4,16,32),
+      dropout = c(0.1, 0.5),
+      batch_size = c(2,50)
     )
   )
   
@@ -700,7 +700,7 @@ if (fit_rnn_models == TRUE) {
         dropout = dropout
       ),
       fit_rnn,
-      epochs = 250,
+      epochs = 500,
       early_stop = FALSE,
       model = "rnn"
     ))
@@ -808,7 +808,6 @@ a = best_rnn_models %>%
   
   
   rnn_loo_preds <- rnn_loo_preds %>%
-    slice(1) %>%
     mutate(fit = pmap(
       list(
         prepped_data = prepped_data,
