@@ -35,11 +35,11 @@ if (!dir.exists(file.path(results_dir,"figs"))) {
 
 # set options -------------------------------------------------------------
 
-fit_parsnip_models <- TRUE
+fit_parsnip_models <- FALSE
 
 fit_rnn_models <- FALSE
 
-run_query_erddap <-  TRUE
+run_query_erddap <-  FALSE
 
 run_next_forecast <- TRUE
 
@@ -728,7 +728,7 @@ if (fit_rnn_models == TRUE) {
   write_rds(rnn_experiments, path = file.path(results_dir, "rnn_experiments.rds"))
   
 # } else {
-#   rnn_experiments <- readr::read_rds(file.path(results_dir, "rnn_experiments.rds"))
+  rnn_experiments <- readr::read_rds(file.path(results_dir, "rnn_experiments.rds"))
 #   
 # }
 # select models -----------------------------------------------------------
@@ -785,7 +785,7 @@ a = best_rnn_models %>%
     ))
   
   rnn_loo_preds <- best_rnn_models %>%
-    left_join(looframe, by = "dep_age") %>%
+    left_join(rnn_looframe, by = "dep_age") %>%
     # filter(delta_dep == FALSE) %>% 
     mutate(
       prepped_data = pmap(
@@ -813,7 +813,7 @@ a = best_rnn_models %>%
         prepped_data = prepped_data,
         lookback = lookback,
         units = units,
-        epochs = epochs,
+        epochs = 500,
         save_name = fit_name,
         batch_size = batch_size,
         dropout = dropout
