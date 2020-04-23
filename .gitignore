@@ -2,11 +2,15 @@
 .Rhistory
 .Rapp.history
 
+results/**/*.rds
+results/**/*.csv
+results/**/fits/
+
+!results/**/*_loo_results.csv
 
 data/*erddap*
 # Session Data files
 .RData
-results/
 # User-specific files
 .Ruserdata
 
