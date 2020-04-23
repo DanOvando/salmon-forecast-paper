@@ -222,7 +222,7 @@ fit_salmon <- function(dep_age,
     mutate(ret_yr = ret_yr + 1,
            brood_yr = brood_yr + 1,
            ret = -999)
-  
+
   salmon_data <- data %>% {
     if (forecast) {
       bind_rows(., forecast_data)
