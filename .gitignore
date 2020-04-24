@@ -1,7 +1,7 @@
 # History files
 .Rhistory
 .Rapp.history
-
+*.pdf
 results/**/*.rds
 results/**/*.csv
 results/**/fits/
@@ -10,7 +10,7 @@ results/**/fits/
 
 data/*erddap*
 # Session Data files
-.RData
+**.RData
 # User-specific files
 .Ruserdata
 

@@ -41,7 +41,7 @@ fit_rnn_models <- FALSE
 
 run_query_erddap <-  TRUE
 
-run_next_forecast <- TRUE
+run_next_forecast <- FALSE
 
 stride <- 4 #stride for errdaap data
 
@@ -834,7 +834,8 @@ rolp <- rnn_loo_preds
 rnn_loo_results <- rnn_loo_preds %>%
   select(-prepped_data, -fit) %>% 
   unnest(cols = predictions) %>% 
-  mutate(pred = pmax(pred, 0)) %>% 
+  mutate(pred = pmax(pred * scalar, 0),
+         ret = ret * scalar) %>% 
   filter(ret_yr == test_year)
 
   
@@ -865,14 +866,15 @@ rnn_age_sys_loo_results <- rnn_loo_results %>%
 
 
 rnn_loo_results <- rnn_loo_results %>% 
-  separate(age_group,c("fwa","oa"), sep =  "\\." , convert = TRUE, remove = FALSE) %>% 
+  separate(age_group,c("fwa","oa"), sep =  "\\." , convert = TRUE, remove = TRUE) %>% 
+  mutate(age_group = paste(fwa, oa, sep = "_")) %>% 
   rename(return_year = ret_yr,
          observed_returns = ret,
          predicted_returns = pred) %>% 
   mutate(age = fwa + oa + 1) %>% 
   mutate(brood_year = return_year - age) %>% 
-  mutate(model_name = "rnn") %>% 
-  select(model_name, brood_year, return_year, system, age_group, observed_returns, predicted_returns)
+  mutate(model = "rnn") %>% 
+  select(model, brood_year, return_year, system, age_group, observed_returns, predicted_returns)
 
 write_csv(rnn_loo_results, path = file.path(results_dir,"rnn_loo_results.csv"))
 
@@ -1056,19 +1058,18 @@ temp <- best_loo_preds %>%
     c("fwa", "oa"),
     sep =  "\\." ,
     convert = TRUE,
-    remove = FALSE
+    remove = TRUE
   ) %>%
+  mutate(age_group = paste(fwa, oa, sep = "_")) %>% 
   rename(
-    age_group = dep_age,
-    model_name = model_type,
+    model = model_type,
     return_year = ret_yr,
     observed_returns = ret,
     predicted_returns = pred
   ) %>%
   mutate(age = fwa + oa + 1) %>%
   mutate(brood_year = return_year - age) %>% 
-  mutate(model_name = "rnn") %>% 
-  select(model_name, brood_year, return_year, system, age_group, observed_returns, predicted_returns)
+  select(model, brood_year, return_year, system, age_group, observed_returns, predicted_returns)
 
 # temp %>% 
 #   ggplot(aes(observed_returns, predicted_returns)) + 
@@ -1097,13 +1098,20 @@ observed %>%
 simple_forecast <- observed %>%
   group_by(age_group, system) %>%
   arrange(ret_yr) %>%
-  mutate(
-    lag_forecast = observed,
-    runmean_forecast = RcppRoll::roll_meanr(observed, 4)
-  ) %>% 
-  mutate(ret_yr = ret_yr + 1) %>% 
-  pivot_longer(cols = contains("_forecast"), names_to = "model", values_to = "pred") %>% 
-  select(ret_yr, system, age_group, model,observed, pred)
+  mutate(lag_forecast = observed,
+         runmean_forecast = RcppRoll::roll_meanr(observed, 4)) %>%
+  mutate(ret_yr = ret_yr + 1) %>%
+  pivot_longer(
+    cols = contains("_forecast"),
+    names_to = "model",
+    values_to = "pred"
+  ) %>%
+  select(ret_yr, system, age_group, model, observed, pred) %>%
+  ungroup() %>% 
+group_by(system, age_group, model) %>%
+  arrange(ret_yr) %>%
+  mutate(observed = lead(observed)) %>% 
+  ungroup()
 
 
 temp <- simple_forecast %>%
@@ -1114,16 +1122,29 @@ temp <- simple_forecast %>%
     convert = TRUE,
     remove = FALSE
   ) %>%
+  mutate(age_group = paste(fwa, oa, sep = "_")) %>% 
   rename(
-    model_name = model,
+    model = model,
     return_year = ret_yr,
     observed_returns = observed,
     predicted_returns = pred
   ) %>%
   mutate(age = fwa + oa + 1) %>%
   mutate(brood_year = return_year - age) %>% 
-  select(model_name, brood_year, return_year, system, age_group, observed_returns, predicted_returns)
+  na.omit() %>% 
+  select(model, brood_year, return_year, system, age_group, observed_returns, predicted_returns)
 
+
+# temp %>% 
+#   filter(return_year >= 2000,
+#          model == "lag_forecast") %>% 
+#   group_by(return_year, model) %>% 
+#   summarise(observed = sum(observed_returns),
+#             predicted = sum(predicted_returns)) %>% 
+#   ggplot() + 
+#   geom_col(aes(return_year, observed)) + 
+#   geom_point(aes(return_year, predicted)) + 
+#   facet_wrap(~model)
 
 readr::write_csv(temp, path = file.path(results_dir,"benchmark_loo_results.csv"))
 
@@ -1211,6 +1232,319 @@ next_forecast %>%
   geom_line(aes(ret_yr, predicted), color = "red") + 
   facet_wrap(~system)
 
+
+# process forecast --------------------------------------------------------
+
+
+
+
+
+ml_forecast <- loo_results %>%
+  filter(id == best_performer$id) %>%
+  select(ret_yr, system, dep_age, pred, model_type) %>%
+  rename(forecast = pred,
+         age_group = dep_age) 
+
+# aggregate forecasts
+
+forecasts <- ml_forecast %>% 
+  left_join(observed, by = c("ret_yr","age_group","system")) %>% 
+  na.omit() %>% 
+  mutate(observed =  observed / 1000,
+         forecast = forecast / 1000 )  %>% 
+  rename(model = model_type)
+
+total_forecast <- forecasts %>% 
+  filter(ret_yr >= first_year) %>% 
+  group_by(ret_yr, model) %>% 
+  summarise(observed = sum(observed),
+            forecast = sum(forecast))
+
+age_forecast <- forecasts %>% 
+  filter(ret_yr >= first_year) %>% 
+  group_by(ret_yr,age_group,model) %>% 
+  summarise(observed = sum(observed),
+            forecast = sum(forecast))
+
+system_forecast <- forecasts %>% 
+  filter(ret_yr >= first_year) %>% 
+  group_by(ret_yr,system,model) %>% 
+  summarise(observed = sum(observed),
+            forecast = sum(forecast))
+
+
+age_system_forecast <- forecasts %>% 
+  filter(ret_yr >= first_year) %>% 
+  group_by(ret_yr,age_group,system,model) %>% 
+  summarise(observed = sum(observed),
+            forecast = sum(forecast))
+
+total_next_forecast <-  next_forecast %>% 
+  filter(ret_yr == max(ret_yr)) %>% 
+  group_by(ret_yr) %>% 
+  summarise(observed = sum(ret) / 1000, forecast = sum(pred) / 1000)
+
+total_past_forecast <- forecasts %>% 
+  bind_rows(total_next_forecast) %>% 
+  group_by(ret_yr) %>% 
+  summarise(observed = sum(observed),
+            forecast = sum(forecast))
+
+next_total_forecast_plot <- total_past_forecast %>%
+  ungroup() %>%
+  mutate(label = ifelse(ret_yr == max(ret_yr), paste("2020 Forecast:", round(forecast),"Million"),'')) %>% 
+  ggplot() +
+  geom_col(aes(ret_yr, observed), alpha = 0.75) +
+  geom_line(
+    aes(ret_yr, forecast, color = ret_yr == max(ret_yr)),
+    linetype = 2,
+    show.legend = FALSE
+  ) +
+  geom_label_repel(aes(
+    x = max(ret_yr),
+    y = last(forecast),
+    label = label
+  ),
+  nudge_y = 10,
+  size = 5,
+  direction = "y",
+  force = 5,
+  padding = 2,
+  seed = 42) +
+  geom_point(
+    aes(ret_yr, forecast, fill = ret_yr == max(ret_yr)),
+    size = 4,
+    shape = 21,
+    show.legend = FALSE
+  ) +
+  scale_y_continuous(name = "Returns (millions)", limits = c(0,75)) +
+  scale_x_continuous(name = '', limits = c(NA, 2023)) 
+
+next_total_forecast_plot
+
+## -----------------------------------------------------------------------------
+
+system_next_forecast <-  next_forecast %>% 
+  filter(ret_yr == max(ret_yr)) %>% 
+  group_by(ret_yr, system) %>% 
+  summarise(observed = sum(ret) / 1000, forecast = sum(pred) / 1000)
+
+total_past_forecast <- system_forecast %>% 
+  bind_rows(system_next_forecast)
+
+next_system_forecast_plot <-  total_past_forecast %>%
+  ungroup() %>%
+  mutate(label = ifelse(ret_yr == max(ret_yr), paste("2020 Forecast:", round(forecast),"Million"),'')) %>% 
+  ggplot() +
+  geom_col(aes(ret_yr, observed), alpha = 0.75) +
+  geom_line(
+    aes(ret_yr, forecast, color = ret_yr == max(ret_yr)),
+    linetype = 2,
+    show.legend = FALSE
+  ) +
+  geom_point(
+    aes(ret_yr, forecast, fill = ret_yr == max(ret_yr)),
+    size = 4,
+    shape = 21,
+    show.legend = FALSE
+  ) +
+  scale_y_continuous(name = "Returns (millions)") +
+  scale_x_continuous(name = '') + 
+  facet_wrap(~system, scales = "free_y")
+
+next_system_forecast_plot
+
+
+## -----------------------------------------------------------------------------
+
+age_next_forecast <-  next_forecast %>% 
+  filter(ret_yr == max(ret_yr)) %>% 
+  group_by(ret_yr, dep_age) %>% 
+  summarise(observed = sum(ret) / 1000, forecast = sum(pred) / 1000) %>% 
+  rename(age_group = dep_age)
+
+total_past_forecast <- age_forecast %>% 
+  select(-model) %>% 
+  bind_rows(age_next_forecast)
+
+next_age_forecast_plot <- total_past_forecast %>%
+  ungroup() %>%
+  mutate(label = ifelse(ret_yr == max(ret_yr), paste("2020 Forecast:", round(forecast),"Million"),'')) %>% 
+  ggplot() +
+  geom_col(aes(ret_yr, observed), alpha = 0.75) +
+  geom_line(
+    aes(ret_yr, forecast, color = ret_yr == max(ret_yr)),
+    linetype = 2,
+    show.legend = FALSE
+  ) +
+  geom_point(
+    aes(ret_yr, forecast, fill = ret_yr == max(ret_yr)),
+    size = 4,
+    shape = 21,
+    show.legend = FALSE
+  ) +
+  scale_y_continuous(name = "Returns (millions)") +
+  scale_x_continuous(name = '') + 
+  facet_wrap(~age_group, scales = "free_y")
+
+next_age_forecast_plot
+
+## -----------------------------------------------------------------------------
+retrospective_bias_plot <- complete_best_loo_preds %>% 
+  group_by(ret_yr, test_year) %>% 
+  summarise(ret = sum(ret) / 1000,
+            pred = sum(pred) / 1000) %>% 
+  ungroup() %>% 
+  filter(test_year %% 5 == 0) %>% 
+  ggplot() + 
+  geom_col(aes(ret_yr, ret),alpha = 0.5) + 
+  geom_line(aes(ret_yr, pred, color = ret_yr >= test_year),show.legend = FALSE,size = 1) + 
+  geom_point(aes(ret_yr, pred, fill = ret_yr >= test_year),show.legend = FALSE,size = 4, shape = 21) + 
+  scale_x_continuous(name = '') +
+  scale_y_continuous(name = "Returns (millions)")+
+  facet_wrap(~test_year) + 
+  theme(axis.text = element_text(angle = 45, vjust = 0, hjust = 1, size = 10))
+
+retrospective_bias_plot
+
+## -----------------------------------------------------------------------------
+
+
+age_system_performance <- age_system_forecast %>% 
+  group_by(age_group, system, model) %>% 
+  summarise(rmse = yardstick::rmse_vec(truth = observed, estimate = forecast),
+            r2 = yardstick::rsq_vec(truth = observed, estimate = forecast),
+            ccc = yardstick::ccc_vec(truth = observed, estimate = forecast),
+            mape = yardstick::mape_vec(truth = observed, estimate = forecast),
+            bias = mean(forecast - observed)) %>% 
+  ungroup()
+
+
+total_performance <- total_forecast %>% 
+  group_by(model) %>% 
+  summarise(rmse = yardstick::rmse_vec(truth = observed, estimate = forecast),
+            r2 = yardstick::rsq_vec(truth = observed, estimate = forecast),
+            ccc = yardstick::ccc_vec(truth = observed, estimate = forecast),
+            mape = yardstick::mape_vec(truth = observed, estimate = forecast),
+            bias = mean(forecast - observed)) %>% 
+  ungroup() %>% 
+  arrange(rmse)
+
+recent <- total_forecast %>% 
+  filter(ret_yr >= 2014) %>% 
+  group_by(model) %>% 
+  summarise(rmse = yardstick::rmse_vec(truth = observed, estimate = forecast),
+            r2 = yardstick::rsq_vec(truth = observed, estimate = forecast),
+            ccc = yardstick::ccc_vec(truth = observed, estimate = forecast),
+            mape = yardstick::mape_vec(truth = observed, estimate = forecast),
+            bias = mean(forecast - observed)) %>% 
+  ungroup() %>% 
+  arrange(rmse)
+
+
+system_performance <- system_forecast %>% 
+  group_by(model, system) %>% 
+  summarise(rmse = yardstick::rmse_vec(truth = observed, estimate = forecast),
+            r2 = yardstick::rsq_vec(truth = observed, estimate = forecast),
+            ccc = yardstick::ccc_vec(truth = observed, estimate = forecast),
+            mape = yardstick::mape_vec(truth = observed, estimate = forecast),
+            bias = mean(forecast - observed)) %>% 
+  ungroup() %>% 
+  arrange(rmse)
+
+age_performance <- age_forecast %>% 
+  group_by(model, age_group) %>% 
+  summarise(rmse = yardstick::rmse_vec(truth = observed, estimate = forecast),
+            r2 = yardstick::rsq_vec(truth = observed, estimate = forecast),
+            ccc = yardstick::ccc_vec(truth = observed, estimate = forecast),
+            mape = yardstick::mape_vec(truth = observed, estimate = forecast),
+            bias = mean(forecast - observed)) %>% 
+  ungroup() %>% 
+  arrange(rmse)
+
+
+total_performance %>%
+  arrange(rmse) %>% 
+  gt() %>%
+  fmt_number(columns = which(colnames(.) != "model"),
+             decimals = 2)
+
+## -----------------------------------------------------------------------------
+
+
+age_performance %>%
+  group_by(age_group) %>% 
+  arrange(rmse) %>% 
+  gt() %>%
+  fmt_number(columns = which(map_lgl(., is.numeric)),
+             decimals = 2)
+
+
+
+## -----------------------------------------------------------------------------
+
+
+system_performance %>%
+  group_by(system) %>% 
+  arrange(rmse) %>% 
+  gt() %>%
+  fmt_number(columns = which(map_lgl(., is.numeric)),
+             decimals = 2)
+
+
+
+# make forecast table -----------------------------------------------------
+
+
+
+raw_forecast_table <- next_forecast %>% 
+  filter(ret_yr == max(ret_yr)) %>% 
+  rename(forecast = pred,
+         age_group = dep_age) %>% 
+  ungroup() %>% 
+  mutate(
+    age_group= forcats::fct_relevel(age_group, c("1.2","1.3","2.2","2.3"))) %>% 
+  select(ret_yr, system, age_group, forecast) %>% 
+  bind_rows(ml_forecast %>% select(-model_type)) %>% 
+  group_by(system, ret_yr) %>%
+  mutate(forecast = forecast * 1000) %>% 
+  mutate(Totals = sum(forecast)) %>%
+  ungroup() %>% 
+  arrange(ret_yr, age_group) %>% 
+  pivot_wider(names_from = age_group, values_from = forecast) %>% 
+  select(dplyr::everything(),-Totals, Totals)
+
+# write_excel_csv(raw_forecast_table %>% mutate_if(is.numeric,round), "raw-machine-learning-forecast-table.csv")
+
+total_vars <- colnames(raw_forecast_table)
+
+total_vars <- total_vars[str_detect(total_vars,"(\\.)|(Totals)")]
+
+forecast_table <- raw_forecast_table %>%
+  group_by(ret_yr) %>%
+  gt(rowname_col = "system") %>%
+  summary_rows(
+    groups = TRUE,
+    columns = vars(total_vars) ,
+    fns = list(Totals = "sum"),
+    formatter = fmt_number,
+    decimals = 0,
+    use_seps = TRUE
+    
+  ) %>%
+  gt::fmt_number(columns = total_vars, decimals = 0) %>%
+  gt::tab_spanner(label = "Age Group",
+                  columns = (total_vars[total_vars != "Totals"])) %>%
+  gt::tab_style(
+    style = cell_text(weight = "bold"),
+    locations = list(cells_summary(),
+                     cells_data(columns = vars(Totals)))
+  )
+
+forecast_table
+# gt::gtsave(forecast_table,"ml-forecast-table.png", zoom = 10, expand = 10)
+# 
+# gt::gtsave(forecast_table,"ml-forecast-table.tex")
 
 
 

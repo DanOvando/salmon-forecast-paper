@@ -3,7 +3,6 @@ prep_run <- function(results_name,
 ) {
   # add any library you need here -------------------------------------------
   
-  library(tidyverse)
   library(keras)
   library(ggridges)
   library(recipes)
@@ -16,6 +15,19 @@ prep_run <- function(results_name,
   library(ggrepel)
   library(gt)
   library(tensorflow)
+  
+  # for edm script
+  
+  library(doParallel)
+  library(reshape2)
+  library(rEDM)
+  library(tsensembler)
+  library(lubridate)
+  library(geosphere)
+  library(DescTools)
+  
+  # always last
+  library(tidyverse)
   
   # create directory for result batch and prodide description if desired
   

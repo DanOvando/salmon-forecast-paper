@@ -46,7 +46,9 @@ results_dir
 
 This step is pretty minor, just trying to avoid redundant and conflicting libraries. To make sure that everyone's scripts can run on all computers, I'd sugest using the `here` packages (`file.path` also works). `here` will create OS-correct paths on any computer. The only assumption is that the working directory is set to this repository (e.g. i.e. `salmon-forecast-paper`). You can then pass that path to `file.path` to save objects in the correct place. 
 
-In terms of results to save, the only thing I'd request is that we have a final dataframe with columns `model_name`,`brood_yr`,`return_year`, `system`, `age_group`, `observed_returns`, `predicted_returns` saved as a .rds file so that we can load and compare models. 
+In terms of results to save, the only thing I'd request is that we have a final dataframe with columns `model`,`brood_yr`,`return_year`, `system`, `age_group`, `observed_returns`, `predicted_returns` saved as a .rds file so that we can load and compare models. 
+
+`model` is the name of the model e.g. `dlm`, `age_group` is in format "freshwater age"_"ocean age"
 
 I think we decided that 1965 is the first year of data we'll use? So as long as we all start in 1965, and all predictions are one-step ahead predictions, should be able to compare performance easily. 
 

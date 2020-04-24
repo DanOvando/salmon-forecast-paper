@@ -49,9 +49,15 @@ anticipate a lot of code wrangling at this point?
 functions <- list.files("functions")
 
 sapply(functions, function(x) source(file.path("functions",x), print = FALSE))
-#>         prep-run.R
-#> value   ?         
-#> visible FALSE
+#>         edm_helper_functions.R fit-pink-salmon.R fit-rnn-model.R fit-salmon.R
+#> value   ?                      ?                 ?               ?           
+#> visible FALSE                  FALSE             FALSE           FALSE       
+#>         generator.R predict-returns.R prep-run.R prepare_tensor.R
+#> value   ?           ?                 ?          ?               
+#> visible FALSE       FALSE             FALSE      FALSE           
+#>         prepare-data.R query-erddap.R smooth-loss.R tune-salmon.R
+#> value   ?              ?              ?             ?            
+#> visible FALSE          FALSE          FALSE         FALSE
 
 prep_run(results_name = "test", results_description = "testing")
 
@@ -68,9 +74,12 @@ assumption is that the working directory is set to this repository
 `file.path` to save objects in the correct place.
 
 In terms of results to save, the only thing I’d request is that we have
-a final dataframe with columns `model_name`,`brood_yr`,`return_year`,
+a final dataframe with columns `model`,`brood_yr`,`return_year`,
 `system`, `age_group`, `observed_returns`, `predicted_returns` saved as
 a .rds file so that we can load and compare models.
+
+`model` is the name of the model e.g. `dlm`, `age_group` is in format
+“freshwater age”\_“ocean age”
 
 I think we decided that 1965 is the first year of data we’ll use? So as
 long as we all start in 1965, and all predictions are one-step ahead
