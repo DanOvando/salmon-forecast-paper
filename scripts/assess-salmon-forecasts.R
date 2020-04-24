@@ -477,12 +477,16 @@ system_performance %>%
 
 plots <- ls()[str_detect(ls(), "_plot")]
 
-path <- file.path(results_dir,"figs")
+fig_path <- file.path(results_dir,"figs")
+
+if (!dir.exists(fig_path)){
+  dir.create(fig_path)
+}
 
 plotfoo <- function(x,height = 6, width = 9 , device = "pdf",path){
   
-  ggsave(filename = file.path(path,"figs",paste(x,device, sep = '.')),plot = get(x),height = height, width = width)
+  ggsave(filename = file.path(path,paste(x,device, sep = '.')),plot = get(x),height = height, width = width)
   
 }
 
-walk(plots, plotfoo, path = results_dir)
+walk(plots, plotfoo, path = fig_path)

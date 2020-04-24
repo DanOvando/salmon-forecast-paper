@@ -39,6 +39,10 @@ prep_run <- function(results_name,
     
     dir.create(results_dir, recursive = TRUE)
     
+    dir.create(file.path(results_dir,"figs"), recursive = TRUE)
+    
+    dir.create(file.path(results_dir,"fits"), recursive = TRUE)
+    
     write(results_description,
           file.path(results_dir, "result-description.txt"))
     
