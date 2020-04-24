@@ -1,5 +1,11 @@
 # assess salmon forecast performance across models
 
+# if not using an Rstudio project, manually set working directory 
+# to the respository folder before sourcing this script, e.g. 
+# in command line setwd("/Users/danovan/projects/salmon-forecast-paper")
+# Once you do that here will work regardless of the presence of an rstudio project 
+# (it will notice the git file)
+
 functions <- list.files(here::here("functions"))
 
 purrr::walk(functions, ~ source(here::here("functions", .x)))
