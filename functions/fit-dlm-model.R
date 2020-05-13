@@ -1,6 +1,20 @@
 
 
+#' Fit Dynamic Linear Sibling Model
+#'
+#' @param pred.year Integer indicating the prediction return year
+#' @param start.year Integer for starting year of time series for input data
+#' @param model.type Integer factor for log tranformation of predictors and responses: 0-NO, 1-YES
+#' @param data Input data frame of return data from run reconstructions
+#' @param rivers.include String indicating river systems to predict
+#' @param maxit Integer specifying maximum number of MARSS EM iterations
+#'
+#' @return
+#' @export
+#'
+#' @examples
 fit_dlm_model <- function(pred.year, start.year, model.type, data, rivers.include, maxit=1e3) {
+  
   ##### TESTING #####
   # pred.year <- 2017
   # start.year <- 1963
@@ -12,8 +26,8 @@ fit_dlm_model <- function(pred.year, start.year, model.type, data, rivers.includ
   
   
   ##################
-  print(paste('#####','The forecast year is:', pred.year, '#####', sep=' '))
-  require(MARSS)
+  # print(paste('#####','The forecast year is:', pred.year, '#####', sep=' '))
+  # require(MARSS)
   
   #============
   
@@ -200,7 +214,7 @@ fit_dlm_model <- function(pred.year, start.year, model.type, data, rivers.includ
         if(model.type==1) { pred <- exp(pred) }
         
         ##########################
-        print(paste(river, ' ', fw, '.', o, ' ', round(pred, 0), sep=''))
+        # print(paste(river, ' ', fw, '.', o, ' ', round(pred, 0), sep=''))
         
         #Plotting Section
         
