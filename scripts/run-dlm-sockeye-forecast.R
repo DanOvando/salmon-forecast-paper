@@ -16,11 +16,17 @@ require(ggthemes)
 require(MARSS)
 require(readr)
 require(here)
+require(parallel)
+require(snowfall)
 
 # Control Section ---------------------------------------------------------
 
 # Whether to fit model
-do.est <- FALSE
+do.est <- TRUE
+do.parallel <- TRUE
+
+# Number of cores to use for parallel
+n.cores <- detectCores()-2
 
 model <- "dlm"
 
@@ -54,26 +60,53 @@ source(here::here("functions","fit-dlm-model.R"))
 # Note: Can run in parallel to speed things up
 
 if(do.est==TRUE) {
-
-  # ESTIMATION: Loop ---------------------------------------
-  y <- 1
-  for(y in 1:n.years) {
-    print(paste(y, "of", n.years))
+  if(do.parallel==FALSE) {
+    # ESTIMATION: Loop ---------------------------------------
+    y <- 1
+    for(y in 1:n.years) {
+      print(paste(y, "of", n.years))
   
-    return_year <- years[y]
+      return_year <- years[y]
   
-    fit <- fit_dlm_model(pred.year=return_year, start.year=start.year, 
-                         model.type=model.type, data=dat, rivers.include=stocks, maxit=maxit)  
-    #Output list
-    if(y==1) {
-      out.dlm <- data.frame(model, return_year, fit$short)
-    }else {
-      out.dlm <- rbind(out.dlm,  data.frame(model, return_year, fit$short))
+      fit <- fit_dlm_model(pred.year=return_year, start.year=start.year, 
+                             model.type=model.type, data=dat, rivers.include=stocks, maxit=maxit)  
+      #Output list
+      if(y==1) {
+        out.dlm <- data.frame(model, return_year, fit$short)
+      }else {
+        out.dlm <- rbind(out.dlm,  data.frame(model, return_year, fit$short))
+      }
+    }# next y
+  }else {
+    # ESTIMATION: Parallel ---------------------------------------
+  
+    # Wrapper function 
+    wrapper <- function(x) {
+      return_year <- years[x]
+      fit <- fit_dlm_model(pred.year=return_year, start.year=start.year, 
+                             model.type=model.type, data=dat, rivers.include=stocks, maxit=maxit)
+      # Outputs
+      wrapper.out <- data.frame(model, return_year, fit$short)
+      return(wrapper.out)
     }
-  }# next y
-  
-  # ESTIMATION: Parallel ---------------------------------------
-  
+    # Snowfall call
+    sfInit(parallel=TRUE, cpus=n.cores, type='SOCK')  #Detect Cores
+    sfExportAll()
+    sfLibrary(MARSS)
+    snowfall.out <- sfLapply(x=1:n.years, fun=wrapper)
+    sfStop()
+    
+    # Unlist snowfall object
+    for(y in 1:n.years) {
+      if(y==1) {
+        out.dlm <- snowfall.out[[y]]
+      }else {
+        out.dlm <- rbind(out.dlm,   snowfall.out[[y]])
+      }
+    }#next y
+    
+    
+  }
   # ESTIMATION: Save Output ------------------------------------
   write_rds(out.dlm, path=file.path(dir.out, "out.dlm.rds"))
 
