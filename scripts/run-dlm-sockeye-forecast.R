@@ -55,6 +55,7 @@ source(here::here("functions","fit-dlm-model.R"))
 
 if(do.est==TRUE) {
 
+  # ESTIMATION: Loop ---------------------------------------
   y <- 1
   for(y in 1:n.years) {
     print(paste(y, "of", n.years))
@@ -70,7 +71,10 @@ if(do.est==TRUE) {
       out.dlm <- rbind(out.dlm,  data.frame(model, return_year, fit$short))
     }
   }# next y
-  # Save output
+  
+  # ESTIMATION: Parallel ---------------------------------------
+  
+  # ESTIMATION: Save Output ------------------------------------
   write_rds(out.dlm, path=file.path(dir.out, "out.dlm.rds"))
 
 }else {
@@ -97,7 +101,8 @@ dlm_model <- out.dlm.3 %>% select(model, brood_year, return_year, System, age_gr
                              rename("system"="System", "predicted_return"="Forecast")
 
 # Write Output -------------------------------------------------------------
-write_rds(dlm_model, path = file.path(results_dir,"dlm.rds"))
+write_rds(dlm_model, path = file.path(results_dir,"dlm_results.rds"))
+write_csv(dlm_model, path = file.path(dir.out, "dlm_results.csv"))
 
 # Fun Plotting -------------------------------------------------------------
 # g <- dlm_model %>% ggplot(aes(x=observed_return/1e6, y=predicted_return/1e6, color=return_year)) +
