@@ -26,7 +26,7 @@ fit_dlm_model <- function(pred.year, start.year, model.type, data, rivers.includ
   
   
   ##################
-  # print(paste('#####','The forecast year is:', pred.year, '#####', sep=' '))
+  print(paste('#####','The forecast year is:', pred.year, '#####', sep=' '))
   # require(MARSS)
   
   #============
