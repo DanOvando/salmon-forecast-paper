@@ -446,7 +446,7 @@ data <- data %>%
   left_join(sst, by = c("hit_the_water" = "year")) %>%
   left_join(sea_level_pressure, by = c("hit_the_water" = "year")) %>%
   left_join(upstr, by = c("hit_the_water" = "year")) %>%
-  left_join(wide_spatial_env,  by = c("hit_the_water" = "year")) %>% 
+  # left_join(wide_spatial_env,  by = c("hit_the_water" = "year")) %>% 
   ungroup() %>%
   select(-hit_the_water)
 # filter(!system %in% c("Nushagak", "Togiak","Igushik"))
@@ -494,6 +494,8 @@ rugg_salmon <- rugg_salmon %>%
 
 data <- data %>%
   left_join(rugg_salmon, by = c("ret_yr" = "year"))
+
+write_csv(data, path = "bristol_bay_salmon_data.csv")
 
 # explore data ------------------------------------------------------------
 #

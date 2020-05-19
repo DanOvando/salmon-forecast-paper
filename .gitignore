@@ -10,7 +10,8 @@ results/**/fits/
 
 data/*erddap*
 # Session Data files
-**.RData
+* .RData
+*.Rdata
 # User-specific files
 .Ruserdata
 
