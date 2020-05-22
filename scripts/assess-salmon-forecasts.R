@@ -10,17 +10,30 @@ functions <- list.files(here::here("functions"))
 
 purrr::walk(functions, ~ source(here::here("functions", .x)))
 
-prep_run(results_name = "testing", results_description = "testing machine learning")
+prep_run(results_name = "v0.5", results_description = "testing machine learning")
 
 first_year <- 2000
 
 last_year <- 2019
+
+extrafont::loadfonts()
+
+pub_theme <- hrbrthemes::theme_ipsum(base_size = 12, axis_text_size = 14) + 
+  theme(panel.spacing = unit(1, "lines"))
+
+theme_set(pub_theme)
 
 
 data <- read_csv(here::here("data", paste0(last_year, ".csv"))) %>%
   janitor::clean_names() %>%
   mutate(age_group = paste(fw_age, o_age, sep = "."))
 
+
+data %>% 
+  group_by(ret_yr) %>% 
+  summarise(ret = sum(ret)) %>% 
+  ggplot(aes(ret_yr, ret )) + 
+  geom_point()
 
 top_age_groups <- data %>%
   group_by(age_group) %>%
@@ -99,7 +112,8 @@ age_forecast_plot <- age_forecast %>%
   ggplot() + 
   geom_point(aes(year, observed),size = 2) + 
   geom_line(aes(year, forecast, color = model), show.legend = FALSE) + 
-  facet_grid(age_group~model, scales = "free_y")
+  facet_grid(age_group~model, scales = "free_y") + 
+  scale_x_continuous(guide = guide_axis(check.overlap = TRUE, n.dodge = 2))
 
 age_forecast_plot
 
@@ -108,7 +122,9 @@ system_forecast_plot <- system_forecast %>%
   ggplot() + 
   geom_point(aes(year, observed),size = 2) + 
   geom_line(aes(year, forecast, color = model), show.legend = FALSE) + 
-  facet_grid(system~model, scales = "free_y")
+  facet_grid(system~model, scales = "free_y") + 
+  scale_x_continuous(guide = guide_axis(check.overlap = TRUE, n.dodge = 2))
+
 
 system_forecast_plot
 
@@ -370,14 +386,15 @@ age_system_performance_plot <-  age_system_performance %>%
   geom_text(aes(fontface = fface, size = sqrt(p_ret))) + 
   scale_color_gradient(low = "tomato", high = "steelblue", 
                        labels = scales::percent,
-                       name = "% Change in Error",
+                       name = "% Change in Error Relative to rmean",
                        limits = c(-.75,0), 
                        breaks = seq(-.75,0, by = 0.25),
                        guide = guide_colorbar(ticks.colour = "black",frame.colour = "black",barwidth = unit(15, units = "lines")))+ 
   scale_x_discrete(name = '') + 
   scale_y_discrete(name = '')+
   scale_size(range = c(4,12), guide = FALSE) +
-  theme(legend.position = "top")
+  theme(legend.position = "top") + 
+  labs(caption = "Text indicates best performing model from 2000-2019")
 
 age_system_performance_plot
 
@@ -388,13 +405,22 @@ age_system_performance_plot
 naive_ensemble <- age_system_performance %>%
   filter(model != "fri") %>% 
   group_by(age_group, system) %>%
-  filter(rmse == min(rmse)) %>%
+  filter(rmse == min(rmse, na.rm = TRUE)) %>%
   select(age_group, system, model) %>%
   rename(best_model = model)
 
 naive_ensemble_forecasts <- forecasts %>%
   left_join(naive_ensemble, by = c("age_group", "system")) %>%
   filter(model == best_model) 
+
+forecasts %>% 
+  filter(year > 2010) %>% 
+  group_by(year,model) %>% 
+  summarise(r = sum(observed)) %>% 
+  ggplot(aes(year, r, color= model)) + 
+  geom_line() + 
+  geom_vline(aes(xintercept = 2019)) +
+  facet_wrap(~model)
 
 
 
@@ -403,7 +429,7 @@ naive_ensemble_forecasts_plot <- naive_ensemble_forecasts %>%
   summarise(observed = sum(observed),
             forecast = sum(forecast)) %>%
   ungroup() %>%
-  filter(year >= 2000) %>%
+  filter(year >= 2000, year < 2019) %>%
   ggplot() +
   geom_col(aes(year, observed), alpha = 0.75) +
   geom_line(aes(year, forecast), color = "tomato", linetype = 2) +
@@ -485,8 +511,13 @@ if (!dir.exists(fig_path)){
 
 plotfoo <- function(x,height = 6, width = 9 , device = "pdf",path){
   
-  ggsave(filename = file.path(path,paste(x,device, sep = '.')),plot = get(x),height = height, width = width)
+  ggsave(
+    filename = file.path(path, paste(x, device, sep = '.')),
+    plot = get(x),
+    height = height,
+    width = width
+  )
   
 }
 
-walk(plots, plotfoo, path = fig_path)
+walk(plots, plotfoo, path = fig_path, device = "png")

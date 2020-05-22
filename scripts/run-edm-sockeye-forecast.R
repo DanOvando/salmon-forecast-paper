@@ -33,11 +33,11 @@ functions <- list.files(here::here("functions"))
 
 purrr::walk(functions, ~ source(here::here("functions", .x)))
 
-prep_run(results_name = "ml_test", results_description = "testing")
+prep_run(results_name = "v0.5", results_description = "testing")
 
 # set options -------------------------------------------------------------
 
-ncores <- 8
+ncores <- 2
 # run <- "v0.1"
 description <- "testing"
 

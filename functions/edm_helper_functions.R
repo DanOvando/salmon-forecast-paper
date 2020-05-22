@@ -23,7 +23,7 @@ my_mase <- function (y, y_hat, y_prev)
 }
 
 
-composite_predict_one <- function(pred_location, input, years = 2000:2018,
+composite_predict_one <- function(pred_location, input, years = 2000:2019,
   pred_column = 'ret', sync_data ){
 
   uni_dat <- input %>% filter(unq == pred_location)
@@ -391,7 +391,7 @@ summarize_predictions <- function(input){
 }
 
 #Input a combination of values
-loop_preds <- function(year_vec = 2000:2018, systems = unique(dat$System),
+loop_preds <- function(year_vec = 2000:2019, systems = unique(dat$System),
   ages = c("1_2", "1_3", "2_2", "2_3")){
 # browser()
 
@@ -421,7 +421,7 @@ loop_preds <- function(year_vec = 2000:2018, systems = unique(dat$System),
   return(res)
 }
 
-predict_from_group <- function(groups, pred_col1, yr_vec = 2000:2018, ...){
+predict_from_group <- function(groups, pred_col1, yr_vec = 2000:2019, ...){
 # browser()
   # temp <- dat %>% filter(Age %in% groups$Age,
    #  System %in% groups$System)

@@ -26,9 +26,9 @@ do.est <- TRUE
 do.parallel <- TRUE
 
 # Number of cores to use for parallel
-n.cores <- detectCores()-2
+n.cores <- detectCores()-4
 
-model <- "dlm"
+model <- "v0.5"
 
 # Output directory for intermediate results
 dir.out <- here::here("results", model)
@@ -38,7 +38,7 @@ dir.create(dir.out, recursive=TRUE)
 results_dir <- here::here("results")
 
 # Controls for 1-step ahead prediction
-years <- 2000:2018
+years <- 2000:2019
 n.years <- length(years)
 
 stocks <- c('Kvichak','Alagnak','Naknek','Egegik','Ugashik','Igushik','Wood','Nushagak','Togiak')
@@ -126,23 +126,32 @@ out.dlm.3 <- out.dlm.2 %>% left_join(dat, by=c("System"="System",
                                                "fwAge"="fwAge",
                                                "oAge"="oAge"))
 # Convert Observed returns to thousands and change name
-out.dlm.3$ret <- out.dlm.3$ret * 1e3
-out.dlm.3 <- out.dlm.3 %>% rename("observed_return"="ret")
+out.dlm.3$ret <- out.dlm.3$ret #* 1e3
+out.dlm.3 <- out.dlm.3 %>% rename("observed_returns"="ret")
 
 # Reorder and remove unneeded columns ----------------------------------------------
-dlm_model <- out.dlm.3 %>% select(model, brood_year, return_year, System, age_group, observed_return, Forecast) %>% 
-                             rename("system"="System", "predicted_return"="Forecast")
+dlm_model <-
+  out.dlm.3 %>% select(model,
+                       brood_year,
+                       return_year,
+                       System,
+                       age_group,
+                       observed_returns,
+                       Forecast) %>%
+  mutate(Forecast = Forecast / 1e3) %>% 
+  rename("system" = "System", "predicted_returns" =
+           "Forecast")
 
 # Write Output -------------------------------------------------------------
-write_rds(dlm_model, path = file.path(results_dir,"dlm_results.rds"))
-write_csv(dlm_model, path = file.path(dir.out, "dlm_results.csv"))
+write_rds(dlm_model, path = file.path(results_dir,"dlm_loo_results.rds"))
+write_csv(dlm_model, path = file.path(dir.out, "dlm_loo_results.csv"))
 
 # Fun Plotting -------------------------------------------------------------
-# g <- dlm_model %>% ggplot(aes(x=observed_return/1e6, y=predicted_return/1e6, color=return_year)) +
-# theme_linedraw() +
-# scale_color_viridis_c() +
-#   geom_abline(slope=1, col="red") +
-# geom_point() +
-# facet_wrap(system~age_group, scales="free") 
+g <- dlm_model %>% ggplot(aes(x=observed_returns/1e6, y=predicted_returns/1e6, color=return_year)) +
+theme_linedraw() +
+scale_color_viridis_c() +
+  geom_abline(slope=1, col="red") +
+geom_point() +
+facet_wrap(system~age_group, scales="free")
 # 
-# g
+g
