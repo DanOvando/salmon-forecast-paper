@@ -16,12 +16,47 @@ first_year <- 2000
 
 last_year <- 2019
 
+run_edm_forecast <- FALSE
+
+run_ml_forecast <- FALSE
+
+run_ml_forecast <- FALSE
+
+
 extrafont::loadfonts()
 
 pub_theme <- hrbrthemes::theme_ipsum(base_size = 12, axis_text_size = 14) + 
   theme(panel.spacing = unit(1, "lines"))
 
 theme_set(pub_theme)
+
+
+
+
+# run forecasts -----------------------------------------------------------
+
+if (run_edm_forecast){
+  
+  source(here("scripts","run-edm-sockeye-forecast.R"))
+}
+
+if (run_ml_forecast){
+  
+  source(here("scripts","run-ml-sockeye-forecast.R"))
+  
+  
+}
+if (run_dlm_forecast){
+  
+  source(here("scripts","run-dlm-sockeye-forecast.R"))
+  
+}
+
+
+
+# process forecasts -------------------------------------------------------
+
+
 
 
 data <- read_csv(here::here("data", paste0(last_year, ".csv"))) %>%
@@ -429,7 +464,7 @@ naive_ensemble_forecasts_plot <- naive_ensemble_forecasts %>%
   summarise(observed = sum(observed),
             forecast = sum(forecast)) %>%
   ungroup() %>%
-  filter(year >= 2000, year < 2019) %>%
+  filter(year >= 2000) %>%
   ggplot() +
   geom_col(aes(year, observed), alpha = 0.75) +
   geom_line(aes(year, forecast), color = "tomato", linetype = 2) +

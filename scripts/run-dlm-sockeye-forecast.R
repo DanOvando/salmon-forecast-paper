@@ -10,14 +10,14 @@
 #NOTES:
 
 #==================================================================================================
-require(tidyverse)
-require(dplyr)
-require(ggthemes)
-require(MARSS)
-require(readr)
-require(here)
-require(parallel)
-require(snowfall)
+# require(tidyverse)
+# require(dplyr)
+# require(ggthemes)
+# require(MARSS)
+# require(readr)
+# require(here)
+# require(parallel)
+# require(snowfall)
 
 # Control Section ---------------------------------------------------------
 
@@ -28,11 +28,16 @@ do.parallel <- TRUE
 # Number of cores to use for parallel
 n.cores <- detectCores()-4
 
-model <- "v0.5"
+model <- "dlm"
+
+run_name <- results_name
 
 # Output directory for intermediate results
-dir.out <- here::here("results", model)
+dir.out <- here::here("results", run_name)
+
+if (!dir.exists(dir.out)){
 dir.create(dir.out, recursive=TRUE)
+}
 
 # Output folder for complete object
 results_dir <- here::here("results")

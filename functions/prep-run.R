@@ -28,7 +28,9 @@ prep_run <- function(results_name,
   
   # for DLM script
   library(MARSS)
-  
+  library(snowfall)
+  require(parallel)
+  require(snowfall)
   # always last
   library(tidyverse)
   

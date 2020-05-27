@@ -8,11 +8,11 @@
 
 # load ------------------------------------------------------------------------
 
-functions <- list.files(here::here("functions"))
-
-purrr::walk(functions, ~ source(here::here("functions", .x)))
-
-prep_run(results_name = "ml_test", results_description = "testing machine learning")
+# functions <- list.files(here::here("functions"))
+# 
+# purrr::walk(functions, ~ source(here::here("functions", .x)))
+# 
+# prep_run(results_name = "ml_test", results_description = "testing machine learning")
 
 if (!dir.exists(file.path(results_dir,"figs"))) {
   
@@ -71,8 +71,6 @@ max_lat <- 60
 min_lon <- -178
 
 max_lon <- -156
-
-min_year <- 1960
 
 max_year <- 2019
 

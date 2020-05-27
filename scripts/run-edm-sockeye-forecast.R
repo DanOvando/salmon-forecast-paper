@@ -29,17 +29,17 @@
 # }
 # set_here("C:/Users/peter.kuriyama/SynologyDrive/research/postdoc/salmon-forecast-paper")
 
-functions <- list.files(here::here("functions"))
+# functions <- list.files(here::here("functions"))
 
-purrr::walk(functions, ~ source(here::here("functions", .x)))
+# purrr::walk(functions, ~ source(here::here("functions", .x)))
 
-prep_run(results_name = "v0.5", results_description = "testing")
+# prep_run(results_name = "v0.5", results_description = "testing")
 
 # set options -------------------------------------------------------------
 
 ncores <- 2
 # run <- "v0.1"
-description <- "testing"
+# description <- "testing"
 
 # rundir <- here::here("edm", "results", run)
 
@@ -303,10 +303,10 @@ edm_results <- each_pred %>%
                      
   
 
-
-ggplot(temp_comp, aes(x = time)) + geom_point(aes(y = obs)) +
-	geom_line(aes(y = pred, group = pred_type, col = pred_type)) + 
-	facet_wrap(~ riv, scales = 'free_y') 
+# 
+# ggplot(temp_comp, aes(x = time)) + geom_point(aes(y = obs)) +
+# 	geom_line(aes(y = pred, group = pred_type, col = pred_type)) + 
+# 	facet_wrap(~ riv, scales = 'free_y') 
 
 # ggplot(tt1, aes(x = time)) + geom_point(aes(y = obs)) + geom_line(aes(y = pred))
 
