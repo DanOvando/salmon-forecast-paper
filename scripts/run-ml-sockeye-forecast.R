@@ -8,11 +8,11 @@
 
 # load ------------------------------------------------------------------------
 
-# functions <- list.files(here::here("functions"))
-# 
-# purrr::walk(functions, ~ source(here::here("functions", .x)))
-# 
-# prep_run(results_name = "ml_test", results_description = "testing machine learning")
+functions <- list.files(here::here("functions"))
+#
+purrr::walk(functions, ~ source(here::here("functions", .x)))
+#
+prep_run(results_name = "v0.5", results_description = "testing machine learning")
 
 if (!dir.exists(file.path(results_dir,"figs"))) {
   
@@ -37,11 +37,11 @@ if (!dir.exists(file.path(results_dir,"figs"))) {
 
 fit_parsnip_models <- FALSE
 
-fit_rnn_models <- FALSE
+fit_rnn_models <- TRUE
 
 run_query_erddap <-  TRUE
 
-run_next_forecast <- FALSE
+run_next_forecast <- TRUE
 
 stride <- 4 #stride for errdaap data
 
@@ -55,7 +55,7 @@ freshwater_cohort <- TRUE #leave as true
 
 last_year <- 2019 # the final year in the data
 
-min_year <- 1965 # only include data greater than or equal this year
+min_year <- 1963 # only include data greater than or equal this year
 
 age_groups <- 4 #number of top age groups to include
 
@@ -231,7 +231,7 @@ if (run_query_erddap == TRUE) {
     max_lat = max_lat,
     min_lon = min_lon,
     max_lon = max_lon,
-    min_year = min_year,
+    min_year = min_year - 10,
     max_year = max_year,
     stride = 2
   ) %>%
@@ -300,7 +300,7 @@ if (run_query_erddap == TRUE) {
 
 # a = sf::st_intersection(sst, bbay)
 
-sst <- erddap$esrlIcoads1ge$data %>%
+sst <- erddap$erdHadISST$data %>%
   mutate(year = lubridate::year(time),
          month = lubridate::month(time)) %>%
   as.data.frame() %>%
@@ -493,7 +493,7 @@ rugg_salmon <- rugg_salmon %>%
 data <- data %>%
   left_join(rugg_salmon, by = c("ret_yr" = "year"))
 
-write_csv(data, path = "bristol_bay_salmon_data.csv")
+# write_csv(data, path = "bristol_bay_salmon_data.csv")
 
 # explore data ------------------------------------------------------------
 #
@@ -665,7 +665,6 @@ if (fit_rnn_models == TRUE) {
         ages = "cohort"
       )
     )
-  
   # fit each experiment
   rnn_experiments <- rnn_experiments %>%
     mutate(fit = pmap(
@@ -705,7 +704,7 @@ if (fit_rnn_models == TRUE) {
   write_rds(rnn_experiments, path = file.path(results_dir, "rnn_experiments.rds"))
   
 # } else {
-  rnn_experiments <- readr::read_rds(file.path(results_dir, "rnn_experiments.rds"))
+  # rnn_experiments <- readr::read_rds(file.path(results_dir, "rnn_experiments.rds"))
 #   
 # }
 # select models -----------------------------------------------------------
@@ -755,9 +754,12 @@ a = best_rnn_models %>%
 # once the 'best' model is selected, go through and fit models 
 # using the selected hyperparameters in a leave-one-out style (fit through 2000, predict 2001, fit through 2001, predict 2002, etc. )
 
+rnn_looframe <- looframe %>% 
+  select(dep_age, test_year) %>% 
+  unique()
+
   rnn_loo_preds <- best_rnn_models %>%
     left_join(rnn_looframe, by = "dep_age") %>%
-    # filter(delta_dep == FALSE) %>% 
     mutate(
       prepped_data = pmap(
         list(
@@ -799,14 +801,14 @@ a = best_rnn_models %>%
   
   
   # test <- load_model_hdf5(file.path(results_dir,"fits", "depage_2.2-year_2000-delta_FALSE.h5"rnn_loo_preds <- rnn_loo_preds %>%
-  mutate(predictions = pmap(
-    list(
-      prepped_data = prepped_data,
-      fit = fit,
-      return_delta = FALSE
-    ),
-    predict_returns
-  ))
+  # mutate(predictions = pmap(
+  #   list(
+  #     prepped_data = prepped_data,
+  #     fit = fit,
+  #     return_delta = FALSE
+  #   ),
+  #   predict_returns
+  # ))
 
 write_rds(rnn_loo_preds, file.path(results_dir, "rnn_loo_preds.rds"))
 

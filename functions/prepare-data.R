@@ -142,7 +142,6 @@ prepare_data <-
         na.omit()
       
     }
-    
     ogs <- temp_y$system
     
     temp_y <- temp_y %>%
