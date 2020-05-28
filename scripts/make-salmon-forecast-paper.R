@@ -16,17 +16,15 @@ first_year <- 2000
 
 last_year <- 2019
 
-run_edm_forecast <- FALSE
+run_edm_forecast <- TRUE
 
-run_dlm_forecast <- FALSE
+run_dlm_forecast <- TRUE
 
-run_ml_forecast <- FALSE
-
-
+run_ml_forecast <- TRUE
 
 extrafont::loadfonts()
 
-pub_theme <- hrbrthemes::theme_ipsum(base_size = 12, axis_text_size = 14) + 
+pub_theme <- hrbrthemes::theme_ipsum(base_size = 10, axis_text_size = 12) + 
   theme(panel.spacing = unit(1, "lines"))
 
 theme_set(pub_theme)

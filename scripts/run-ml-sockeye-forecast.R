@@ -8,11 +8,11 @@
 
 # load ------------------------------------------------------------------------
 
-functions <- list.files(here::here("functions"))
-#
-purrr::walk(functions, ~ source(here::here("functions", .x)))
-#
-prep_run(results_name = "v0.5", results_description = "testing machine learning")
+# functions <- list.files(here::here("functions"))
+# #
+# purrr::walk(functions, ~ source(here::here("functions", .x)))
+# #
+# prep_run(results_name = "v0.5", results_description = "testing machine learning")
 
 if (!dir.exists(file.path(results_dir,"figs"))) {
   
@@ -35,7 +35,7 @@ if (!dir.exists(file.path(results_dir,"figs"))) {
 
 # set options -------------------------------------------------------------
 
-fit_parsnip_models <- FALSE
+fit_parsnip_models <- TRUE
 
 fit_rnn_models <- TRUE
 
@@ -47,7 +47,7 @@ stride <- 4 #stride for errdaap data
 
 weight_returns <- FALSE
 
-cores <- 8
+cores <- parallel::detectCores() - 4
 
 trees <- 500
 
