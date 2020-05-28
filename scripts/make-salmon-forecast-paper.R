@@ -10,7 +10,7 @@ functions <- list.files(here::here("functions"))
 
 purrr::walk(functions, ~ source(here::here("functions", .x)))
 
-prep_run(results_name = "v0.5", results_description = "testing machine learning")
+prep_run(results_name = "v0.5", results_description = "draft publication")
 
 first_year <- 2000
 
@@ -18,9 +18,10 @@ last_year <- 2019
 
 run_edm_forecast <- FALSE
 
-run_ml_forecast <- FALSE
+run_dlm_forecast <- FALSE
 
 run_dlm_forecast <- FALSE
+
 
 
 extrafont::loadfonts()
@@ -40,17 +41,19 @@ if (run_edm_forecast){
   source(here("scripts","run-edm-sockeye-forecast.R"))
 }
 
+if (run_dlm_forecast){
+  
+  source(here("scripts","run-dlm-sockeye-forecast.R"))
+  
+}
+
 if (run_ml_forecast){
   
   source(here("scripts","run-ml-sockeye-forecast.R"))
   
   
 }
-if (run_dlm_forecast){
-  
-  source(here("scripts","run-dlm-sockeye-forecast.R"))
-  
-}
+
 
 
 
@@ -170,6 +173,8 @@ age_system_performance <- age_system_forecast %>%
   arrange(year) %>% 
   summarise(rmse = yardstick::rmse_vec(truth = observed, estimate = forecast),
             r2 = yardstick::rsq_vec(truth = observed, estimate = forecast),
+            ccc = yardstick::ccc_vec(truth = observed, estimate = forecast),
+            mape = yardstick::mape_vec(truth = observed, estimate = forecast),
             mae = yardstick::mae_vec(truth = observed, estimate = forecast),
             mase = yardstick::mase_vec(truth = observed, estimate = forecast),
             bias = mean(forecast - observed)) %>% 
@@ -181,6 +186,8 @@ total_performance <- total_forecast %>%
   arrange(year) %>% 
   summarise(rmse = yardstick::rmse_vec(truth = observed, estimate = forecast),
             r2 = yardstick::rsq_vec(truth = observed, estimate = forecast),
+            ccc = yardstick::ccc_vec(truth = observed, estimate = forecast),
+            mape = yardstick::mape_vec(truth = observed, estimate = forecast),
             mae = yardstick::mae_vec(truth = observed, estimate = forecast),
             mase = yardstick::mase_vec(truth = observed, estimate = forecast),
             bias = mean(forecast - observed)) %>% 
@@ -192,6 +199,8 @@ recent <- total_forecast %>%
   group_by(model) %>% 
   summarise(rmse = yardstick::rmse_vec(truth = observed, estimate = forecast),
             r2 = yardstick::rsq_vec(truth = observed, estimate = forecast),
+            ccc = yardstick::ccc_vec(truth = observed, estimate = forecast),
+            mape = yardstick::mape_vec(truth = observed, estimate = forecast),
             mae = yardstick::mae_vec(truth = observed, estimate = forecast),
             mase = yardstick::mase_vec(truth = observed, estimate = forecast),
             bias = mean(forecast - observed)) %>% 
@@ -213,6 +222,8 @@ age_performance <- age_forecast %>%
   group_by(model, age_group) %>% 
   summarise(rmse = yardstick::rmse_vec(truth = observed, estimate = forecast),
             r2 = yardstick::rsq_vec(truth = observed, estimate = forecast),
+            ccc = yardstick::ccc_vec(truth = observed, estimate = forecast),
+            mape = yardstick::mape_vec(truth = observed, estimate = forecast),
             mae = yardstick::mae_vec(truth = observed, estimate = forecast),
             mase = yardstick::mase_vec(truth = observed, estimate = forecast),
             bias = mean(forecast - observed)) %>% 
@@ -274,7 +285,7 @@ age_system_performance_plot
 
 performance_files <- ls()[str_detect(ls(),"_performance")]
 
-save(list = performance_files,file = file.path(results_dir,"performance_files.RData"))
+save(list = performance_files,file = file.path(results_dir,"performance_files.Rdata"))
 
 
 

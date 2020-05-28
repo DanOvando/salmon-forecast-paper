@@ -5,12 +5,13 @@
 results/**/*.rds
 results/**/*.csv
 results/**/fits/
-
+*.png
+*.pdf
 !results/**/*_loo_results.csv
 
 data/*erddap*
 # Session Data files
-* .RData
+*.RData
 *.Rdata
 # User-specific files
 .Ruserdata

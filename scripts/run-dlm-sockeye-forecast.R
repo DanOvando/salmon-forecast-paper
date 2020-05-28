@@ -40,7 +40,7 @@ dir.create(dir.out, recursive=TRUE)
 }
 
 # Output folder for complete object
-results_dir <- here::here("results")
+# results_dir <- here::here("results")
 
 # Controls for 1-step ahead prediction
 years <- 2000:2019
