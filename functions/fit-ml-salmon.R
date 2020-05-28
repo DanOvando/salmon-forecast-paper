@@ -1,4 +1,5 @@
-fit_salmon <- function(dep_age,
+fit_ml_salmon <- function(dep_age,
+                          pred_system,
                        test_year,
                        data,
                        scalar = 10000,
@@ -287,6 +288,13 @@ fit_salmon <- function(dep_age,
   }
   
   
+  
+  if (pred_system != "all"){
+    salmon_data <- salmon_data %>% 
+      filter(system == pred_system)  %>% 
+      select(-system)
+  }
+  
   # a %>%
   #   ggplot(aes(spawner_strength, ret, color = system)) +
   #   geom_point()
@@ -304,6 +312,8 @@ fit_salmon <- function(dep_age,
   #                                    hjust = 1))
   salmon_train <- salmon_data %>%
     filter(ret_yr < test_year)
+  
+
   
   # salmon_recipe <- recipe(ret ~ ., data = salmon_train) %>%
   #   step_center(contains("env_")) %>%
@@ -349,6 +359,7 @@ fit_salmon <- function(dep_age,
   
   # tune_grid <- tune_grid %>%
   #   slice(1)
+  
   salmon_recipe <-
     recipe(ret ~ ., data = salmon_train) %>% {
       if (log_returns == TRUE) {
@@ -397,7 +408,7 @@ fit_salmon <- function(dep_age,
   
   baked_salmon <-
     bake(prepped_salmon, new_data = salmon_train)
-
+  
   if (model_type == "rand_forest") {
     # tune_grid <- tidyr::expand_grid(
     #   splitrule = c("variance"),
@@ -602,6 +613,12 @@ fit_salmon <- function(dep_age,
   
   salmon_data$pred <-
     dplyr::case_when(log_returns == TRUE ~ exp(pred$.pred), TRUE ~  pred$.pred)
+  
+  if (pred_system != "all"){
+    
+    salmon_data$system <- pred_system
+    
+  }
   
   if (delta_returns) {
     salmon_data$pred[salmon_data$ret_yr < test_year] <-

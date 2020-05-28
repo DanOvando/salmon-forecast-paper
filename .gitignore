@@ -8,7 +8,7 @@ results/**/fits/
 *.png
 *.pdf
 !results/**/*_loo_results.csv
-
+data/*.rds
 data/*erddap*
 # Session Data files
 *.RData
