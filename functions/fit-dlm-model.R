@@ -158,6 +158,7 @@ fit_dlm_model <- function(pred.year, start.year, model.type, data, rivers.includ
         names(df.pred) <- names(df.data)[-1]
         
         #1. standardize the data
+        
         std.df.data <- scale(df.data)
         
         ##########################

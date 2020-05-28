@@ -17,20 +17,22 @@ first_year <- 2000
 last_year <- 2019
 
 
-run_edm_forecast <- TRUE
+run_edm_forecast <- FALSE
 
-run_dlm_forecast <- TRUE
+run_dlm_forecast <- FALSE
 
-run_ml_forecast <- TRUE
+run_ml_forecast <- FALSE
 
 extrafont::loadfonts()
 
-pub_theme <- hrbrthemes::theme_ipsum(base_size = 10, axis_text_size = 12) + 
-  theme(panel.spacing = unit(1, "lines"))
+pub_theme <-
+  hrbrthemes::theme_ipsum(base_size = 10, axis_text_size = 12) +
+  theme(
+    panel.spacing = unit(1, "lines"),
+    plot.margin = unit(rep(10, 4), units = "points")
+  )
 
 theme_set(pub_theme)
-
-
 
 
 # run forecasts -----------------------------------------------------------
@@ -58,6 +60,18 @@ if (run_ml_forecast){
 
 # process forecasts -------------------------------------------------------
 
+published_forecasts <-
+  get_published_fcst(
+    dir.pf = here(file.path("data", "preseasonForecast.dat")),
+    dir.ids = here(file.path("data", "ID_Systems.csv")),
+    years = 2000:last_year
+  ) %>%
+  rename(forecast = FRIfcst) %>%
+  mutate(model = "fri_forecast") %>% 
+  janitor::clean_names() %>% 
+  rename(year = ret_yr) %>% 
+  mutate(age_group = paste(fw_age, o_age, sep = "_")) %>% 
+  as_tibble()
 
 
 
@@ -297,6 +311,7 @@ salmon_data <- data %>%
 
 write_rds(salmon_data, path = file.path(results_dir,"salmon_data.rds"))
 
+top_systems <- forecasts$system %>% unique()
 
 salmon_data <- salmon_data %>% 
   filter(age_group %in% top_age_groups) %>% 
@@ -304,17 +319,7 @@ salmon_data <- salmon_data %>%
 
 
 
-## -----------------------------------------------------------------------------
 
-return_plot <- salmon_data %>% 
-  group_by(year) %>% 
-  summarise(ret = sum(ret)) %>% 
-  ggplot(aes(year, ret)) + 
-  geom_col(alpha = 0.75) + 
-  scale_y_continuous(name = "Returns (millions)") + 
-  scale_x_continuous(name = '') 
-
-return_plot
 
 
 
@@ -661,9 +666,123 @@ system_performance %>%
 
 
 
-## -----------------------------------------------------------------------------
 
-plots <- ls()[str_detect(ls(), "_plot")]
+
+# figure 1 ----------------------------------------------------------------
+
+
+
+alaska <- rnaturalearth::ne_states( country = "united states of america", returnclass = "sf") %>% 
+  filter(name == "Alaska") %>% 
+  sf::st_transform(crs = 3467)
+
+alaska_bbox <- sf::st_bbox(alaska)
+
+bristol_bay_plot <- ggplot() + 
+  geom_sf(data = alaska) + 
+  coord_sf(xlim = alaska_bbox[c("xmin", "xmax")],
+           ylim = alaska_bbox[c("ymin", "ymax")]) +
+  ggthemes::theme_map() + 
+  labs(caption = "Placeholder for a map if needed; add in river systems?")
+
+
+total_return_plot <- salmon_data %>% 
+  group_by(year) %>% 
+  summarise(ret = sum(ret)) %>% 
+  ggplot(aes(year, ret)) + 
+  geom_area(alpha = 1) + 
+  scale_y_continuous(name = "Returns (millions)", expand = expansion()) + 
+  scale_x_continuous(name = '') + 
+  theme(axis.text.x = element_blank()) + 
+  labs(title = "A")
+
+total_return_plot
+
+
+
+system_return_plot <- salmon_data %>% 
+  filter(system %in% top_systems) %>% 
+  group_by(year, system) %>% 
+  summarise(ret = sum(ret)) %>% 
+  ggplot(aes(year, ret, fill = reorder(system,ret))) + 
+  geom_area(alpha = 1) + 
+  scale_y_continuous(name = "", expand = expansion()) + 
+  scale_x_continuous(name = '') +
+  scale_fill_viridis_d(name = 'System') + 
+  theme(axis.text.x = element_blank()) + 
+  labs(title = "B")
+
+
+system_return_plot
+
+age_return_plot <- salmon_data %>% 
+  filter(system %in% top_systems) %>% 
+  group_by(year, age_group) %>% 
+  summarise(ret = sum(ret)) %>% 
+  ggplot(aes(year, ret, fill = (age_group))) + 
+  geom_area(alpha = 1) + 
+  scale_y_continuous(name = "", expand = expansion()) + 
+  scale_x_continuous(name = 'Year') +
+  scale_fill_viridis_d(option = "plasma", name = 'Age Group') + 
+  labs(title = "C")
+
+
+age_return_plot
+
+figure_1 <-  (total_return_plot / system_return_plot / age_return_plot)
+
+
+# figure 2 ----------------------------------------------------------------
+
+# placeholder for summary of historic performance?
+
+
+
+# figure 3 ----------------------------------------------------------------
+
+top_models <- system_performance %>% 
+  group_by(system) %>% 
+  filter(rmse == min(rmse)) %>% 
+  mutate(combo = paste(system, model, sep = "_"))
+
+top_system_forecast <- system_forecast %>% 
+  mutate(combo = paste(system, model, sep = "_")) %>% 
+  filter(combo %in% top_models$combo)
+
+system_forecast_figure <- top_system_forecast %>% 
+  ggplot() + 
+  geom_area(aes(year, observed)) + 
+  geom_line(aes(year, forecast, color = model)) +
+  geom_point(aes(year, forecast, fill = model), shape = 21, size = 4) +
+  facet_wrap(~system, scales = "free_y")
+
+
+# figure 4 ----------------------------------------------------------------
+
+top_models <- age_performance %>% 
+  group_by(age_group) %>% 
+  filter(rmse == min(rmse)) %>% 
+  mutate(combo = paste(age_group, model, sep = "_")) %>% 
+  ungroup()
+
+top_age_forecast <- age_forecast %>% 
+  mutate(combo = paste(age_group, model, sep = "_")) %>% 
+  filter(combo %in% top_models$combo)
+
+age_forecast_figure <- top_age_forecast %>% 
+  ggplot() + 
+  geom_area(aes(year, observed)) + 
+  geom_line(aes(year, forecast, color = model)) +
+  geom_point(aes(year, forecast, fill = model), shape = 21, size = 4) +
+  facet_wrap(~age_group, scales = "free_y")
+
+
+age_forecast_figure
+# save things -------------------------------------------------------------
+
+
+
+plots <- ls()[str_detect(ls(), "(_plot)|(_figure)")]
 
 fig_path <- file.path(results_dir,"figs")
 

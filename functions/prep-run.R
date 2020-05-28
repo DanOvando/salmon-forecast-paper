@@ -15,6 +15,7 @@ prep_run <- function(results_name,
   library(ggrepel)
   library(gt)
   library(tensorflow)
+  library(patchwork)
   
   # for edm script
   
