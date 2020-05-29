@@ -14,6 +14,8 @@ purrr::walk(functions, ~ source(here::here("functions", .x)))
 #
 prep_run(results_name = "v0.5", results_description = "testing machine learning")
 
+set.seed(42)
+
 if (!dir.exists(file.path(results_dir,"figs"))) {
   
   dir.create(file.path(results_dir, "figs"), recursive = TRUE)
@@ -35,13 +37,13 @@ if (!dir.exists(file.path(results_dir,"figs"))) {
 
 # set options -------------------------------------------------------------
 
-fit_parsnip_models <- FALSE
+fit_parsnip_models <- TRUE
 
-fit_rnn_models <- FALSE
+fit_rnn_models <- TRUE
 
 run_query_erddap <-  TRUE
 
-run_next_forecast <- TRUE
+run_next_forecast <- FALSE
 
 by_system <- TRUE
 
@@ -49,9 +51,9 @@ stride <- 4 #stride for errdaap data
 
 weight_returns <- FALSE
 
-cores <- parallel::detectCores() - 4
+cores <- parallel::detectCores() - 2
 
-trees <- 500
+trees <- 1000
 
 freshwater_cohort <- TRUE #leave as true
 
@@ -564,7 +566,7 @@ if (fit_parsnip_models == TRUE){
             freshwater_cohort = freshwater_cohort,
             weight = weight_returns,
             trees = trees,
-            n_mtry = 5,
+            initial_prop = 0.7,
             forecast = FALSE,
             .progress = TRUE
           ))
@@ -885,12 +887,6 @@ age_sys_loo_results <- loo_results %>%
             predicted = sum(pred))
 
 
-total_loo_results %>% 
-  ggplot() + 
-  geom_col(dat = data, aes(ret_yr,ret)) + 
-  geom_point(aes(ret_yr, predicted, fill = use_wide_cohorts), shape = 21, size= 2, alpha = 0.85) +
-  theme_minimal() + 
-  scale_x_continuous(limits = c(first_year - 1, NA))
 
 performance_summary <- age_sys_loo_results %>% 
   group_by(!!!run_ids) %>%
@@ -1101,7 +1097,9 @@ readr::write_csv(temp, path = file.path(results_dir,"benchmark_loo_results.csv")
 
 predframe <-
   tidyr::expand_grid(dep_age = top_age_groups,
-                     test_year = last_year)
+                     test_year = last_year,
+                     pred_system = unique(top_systems$system),
+                     model_type = unique(best_performer$model_type))
 
 if (run_next_forecast){
 

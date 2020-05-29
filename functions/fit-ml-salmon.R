@@ -446,11 +446,26 @@ fit_ml_salmon <- function(dep_age,
     #   left_join(salmon_rolling_origin, by = "id")
     # 
 
-    tune_grid <- parameters(min_n(), tree_depth(), learn_rate(), mtry(), trees())  %>% 
+    # xgb_spec <- boost_tree(
+    #   trees = 1000, 
+    #   tree_depth = tune(), 
+    #   min_n = tune(), 
+    #   loss_reduction = tune(),                     ## first three: model complexity
+    #   sample_size = tune(), 
+    #   mtry = tune(),         ## randomness
+    #   learn_rate = tune(),                         ## step size
+    # ) %>% 
+    #   set_engine("xgboost") %>% 
+    #   set_mode("classification")
+    # 
+    
+    tune_grid <- parameters(min_n(), tree_depth(), learn_rate(), mtry(),
+                            loss_reduction(),sample_size = sample_prop())%>% 
       dials::finalize(mtry(), x = baked_salmon %>% select(-(1:2)))
     
-    xgboost_grid <- grid_max_entropy(tune_grid, size = 15) %>% 
-      mutate(grid_row = 1:nrow(.))
+    xgboost_grid <- grid_latin_hypercube(tune_grid, size = 25) %>% 
+      mutate(grid_row = 1:nrow(.)) %>% 
+      mutate(trees = trees)
     
     tune_grid <- tidyr::expand_grid(grid_row = 1:nrow(xgboost_grid), id = unique(salmon_rolling_origin$id)) %>% 
       left_join(xgboost_grid, by = "grid_row") %>% 
@@ -475,7 +490,7 @@ fit_ml_salmon <- function(dep_age,
     as.list()
   
   # View(juice(prepped_salmon))
-  
+  # a <- Sys.time()
   tuning_fit <- pmap(
     tune_pars,
     tune_salmon,
@@ -484,6 +499,8 @@ fit_ml_salmon <- function(dep_age,
     log_returns = log_returns
   )
   
+  # b <- Sys.time() - a
+  # browser()
   tune_grid$tuning_fit <- tuning_fit
   
   
@@ -492,12 +509,22 @@ fit_ml_salmon <- function(dep_age,
     unnest(cols = tuning_fit)
   
   tune_vars <-
-    colnames(best_params)[!colnames(best_params) %in% c(".pred", "observed","id")]
+    colnames(best_params)[!colnames(best_params) %in% c(".pred", "observed","id","grid_row")]
 
   best_params <- best_params %>%
     group_by(!!!rlang::parse_exprs(tune_vars)) %>%
     yardstick::rmse(observed, .pred) %>%
     ungroup()
+  
+  # a = best_params %>% 
+  #   pivot_longer(min_n:trees, names_to = "dial", values_to = "value")
+  # 
+  # a %>% 
+  #   ggplot(aes(value, .estimate)) + 
+  #   geom_point() + 
+  #   facet_wrap(~dial, scales = "free_x")
+  # 
+  # browser()
   # best_params <- best_params %>%
   #   group_by(!!!rlang::parse_exprs(tune_vars)) %>%
   #   summarise(.estimate = mean(atan(abs((observed -.pred) / observed))))
@@ -515,16 +542,16 @@ fit_ml_salmon <- function(dep_age,
   # best_params %>%
   #   ggplot(aes(mtry, .estimate, color = factor(min_n))) +
   #   geom_point()
-  
+  # 
   # best_params %>%
   #   ggplot(aes(mtry, .estimate, color = splitrule)) +
   #   geom_point() +
   #   facet_wrap(~min_n)
 # browser()
-#   best_params %>%
-#     ggplot(aes(mtry, .estimate, color = (trees))) +
-#     geom_point() +
-#     facet_grid(tree_depth~learn_rate)
+  # best_params %>%
+  #   ggplot(aes(mtry, .estimate, color = (trees))) +
+  #   geom_point() +
+  #   facet_grid(tree_depth~learn_rate)
 
   best <- best_params %>%
     filter(.estimate == min(.estimate)) %>%
@@ -542,7 +569,6 @@ fit_ml_salmon <- function(dep_age,
                           importance = "none",
                           splitrule = best$splitrule) %>%
       parsnip::fit(formula(prepped_salmon), data = juice(prepped_salmon))
-    
     # importance(trained_model$fit) %>%
     #   broom::tidy() %>%
     #   View()
@@ -568,10 +594,14 @@ fit_ml_salmon <- function(dep_age,
     
   } # close model_type == "random_forest"
   if (model_type == "boost_tree") {
+
     trained_model <-
       parsnip::boost_tree(
         mode = "regression",
         mtry = best$mtry,
+        min_n = best$min_n,
+        loss_reduction = best$loss_reduction,
+        sample_size = best$sample_size, 
         learn_rate = best$learn_rate,
         tree_depth = best$tree_depth,
         trees = best$trees

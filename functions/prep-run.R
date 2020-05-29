@@ -16,6 +16,8 @@ prep_run <- function(results_name,
   library(gt)
   library(tensorflow)
   library(patchwork)
+  library(fishualize)
+  library(PNWColors)
   
   # for edm script
   

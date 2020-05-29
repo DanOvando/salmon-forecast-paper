@@ -67,13 +67,17 @@ tune_salmon <- function(model_type = "rand_forest",salmon_recipe, log_returns = 
   #   View()
   } 
   if (model_type == "boost_tree"){
+    
     salmon_fits <-
       parsnip::boost_tree(
         mode = "regression",
         mtry = arguments$mtry,
+        min_n = arguments$min_n,
         learn_rate = arguments$learn_rate,
         tree_depth = arguments$tree_depth,
-        trees = arguments$trees
+        loss_reduction = arguments$loss_reduction,
+        trees = arguments$trees,
+        sample_size = arguments$sample_size
       ) %>%
       parsnip::set_engine(
         "xgboost"
