@@ -527,7 +527,7 @@ looframe <-
     log_returns = c(FALSE),
     assess = c(1),
     delta_returns = c(FALSE),
-    omit_nas = c(TRUE)
+    omit_nas = c(FALSE)
   ) %>% 
   filter(!(log_returns == TRUE & delta_returns == TRUE))
 
@@ -556,7 +556,7 @@ if (fit_parsnip_models == TRUE){
             use_years = use_years,
             log_returns = log_returns,
             delta_returns = delta_returns,
-            omit_nas = omit_nas,
+            omit_nas = FALSE,
             assess = assess,
             factor_years = factor_years
             ),
@@ -566,7 +566,7 @@ if (fit_parsnip_models == TRUE){
             freshwater_cohort = freshwater_cohort,
             weight = weight_returns,
             trees = trees,
-            initial_prop = 0.7,
+            initial_prop = 0.75,
             forecast = FALSE,
             .progress = TRUE
           ))

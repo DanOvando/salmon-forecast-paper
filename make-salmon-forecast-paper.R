@@ -743,6 +743,7 @@ pal <- pnw_palette("Winter",n = n_distinct(system_performance$model))
 
 top_models <- system_performance %>% 
   group_by(system) %>% 
+  # filter(model == "boost_tree") %>% 
   filter(rmse == min(rmse)) %>% 
   mutate(combo = paste(system, model, sep = "_"))
 

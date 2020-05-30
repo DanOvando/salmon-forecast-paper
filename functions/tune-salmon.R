@@ -45,7 +45,6 @@ tune_salmon <- function(model_type = "rand_forest",salmon_recipe, log_returns = 
     #   num.threads = 10,
     #   num.trees = trees
     # )
-    
   salmon_fits <-
     parsnip::rand_forest(
       mode = "regression",
@@ -108,7 +107,7 @@ tune_salmon <- function(model_type = "rand_forest",salmon_recipe, log_returns = 
   }
   
   if (nrow(assessment_prediction) != nrow(assessment_split)){
-    browser()
+    stop("something really bad hapened in tune-salmon.R")
   }
   assessment_prediction$observed = assessment_split$ret
   
