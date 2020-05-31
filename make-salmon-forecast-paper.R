@@ -10,17 +10,17 @@ functions <- list.files(here::here("functions"))
 
 purrr::walk(functions, ~ source(here::here("functions", .x)))
 
-prep_run(results_name = "v0.5", results_description = "draft publication")
+prep_run(results_name = "v0.6", results_description = "draft publication with boost tree improvements")
 
 first_year <- 2000
 
 last_year <- 2019
 
-run_edm_forecast <- FALSE
+run_edm_forecast <- TRUE
 
-run_dlm_forecast <- FALSE
+run_dlm_forecast <- TRUE
 
-run_ml_forecast <- FALSE
+run_ml_forecast <- TRUE
 
 extrafont::loadfonts()
 
@@ -270,25 +270,25 @@ system_performance_plot <- system_performance %>%
 
 system_performance_plot
 
-age_system_performance_plot <-  age_system_performance %>% 
-  group_by(age_group, system) %>% 
-  mutate(ml_improvement = (rmse[model == "lag"] - rmse[model == "boost_tree"]) /  rmse[model == "lag"],
-         ref_rmse =rmse[model == "lag"],
-         sd_rmse = sd(rmse)) %>% 
-  filter(r2 == min(r2))  %>%
-  ungroup() %>% 
-  mutate(scaled_rmse = -(ref_rmse - rmse) / ref_rmse,
-         fface = ifelse(model == "boost_tree", "italic","plain")) %>% 
-  ggplot(aes(system, age_group, label = model,color = scaled_rmse)) + 
-  geom_text(size = 7, aes(fontface = fface)) + 
-  theme_bw() + 
-  scale_color_gradient(low = "tomato", high = "steelblue", 
-                       labels = scales::percent,
-                       name = "% Reduction in RMSE",
-                       limits = c(-.75,0), 
-                       breaks = seq(-.75,0, by = 0.25))
-
-age_system_performance_plot
+# age_system_performance_plot <-  age_system_performance %>% 
+#   group_by(age_group, system) %>% 
+#   mutate(ml_improvement = (rmse[model == "lag"] - rmse[model == "boost_tree"]) /  rmse[model == "lag"],
+#          ref_rmse =rmse[model == "lag"],
+#          sd_rmse = sd(rmse)) %>% 
+#   filter(r2 == min(r2))  %>%
+#   ungroup() %>% 
+#   mutate(scaled_rmse = -(ref_rmse - rmse) / ref_rmse,
+#          fface = ifelse(model == "boost_tree", "italic","plain")) %>% 
+#   ggplot(aes(system, age_group, label = model,color = scaled_rmse)) + 
+#   geom_text(size = 7, aes(fontface = fface)) + 
+#   theme_bw() + 
+#   scale_color_gradient(low = "tomato", high = "steelblue", 
+#                        labels = scales::percent,
+#                        name = "% Reduction in RMSE",
+#                        limits = c(-.75,0), 
+#                        breaks = seq(-.75,0, by = 0.25))
+# 
+# age_system_performance_plot
 
 
 # save things -------------------------------------------------------------
@@ -778,6 +778,7 @@ system_forecast_figure <- top_system_forecast %>%
 # figure 4 ----------------------------------------------------------------
 
 top_models <- age_performance %>% 
+  # filter(model == "boost_tree") %>% 
   group_by(age_group) %>% 
   filter(rmse == min(rmse)) %>% 
   mutate(combo = paste(age_group, model, sep = "_")) %>% 

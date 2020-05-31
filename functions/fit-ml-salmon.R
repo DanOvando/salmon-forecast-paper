@@ -340,7 +340,7 @@ fit_ml_salmon <- function(dep_age,
   
   annual_returns <-
     salmon_train %>% group_by(year) %>% nest() %>% ungroup()
-  
+
   salmon_rolling_origin <- rsample::rolling_origin(
     annual_returns,
     initial =  round(nrow(annual_returns) * initial_prop),
@@ -461,11 +461,11 @@ fit_ml_salmon <- function(dep_age,
     #   set_mode("classification")
     # 
     
-    tune_grid <- parameters(min_n(), tree_depth(), learn_rate(), mtry(),
-                            loss_reduction(),sample_size = sample_prop())%>% 
+    tune_grid <- parameters(min_n(range(2,10)), tree_depth(range(4,15)), learn_rate(range = c(-2,0)), mtry(),
+                            loss_reduction(),sample_size(range = c(1,1)), trees(range = c(500,2000)))%>% 
       dials::finalize(mtry(), x = baked_salmon %>% select(-(1:2)))
     
-    xgboost_grid <- grid_latin_hypercube(tune_grid, size = 30) %>% 
+    xgboost_grid <- grid_max_entropy(tune_grid, size = 30) %>% 
       mutate(grid_row = 1:nrow(.)) %>% 
       mutate(trees = trees)
     
@@ -509,7 +509,7 @@ fit_ml_salmon <- function(dep_age,
   best_params <- tune_grid %>%
     select(-splits) %>%
     unnest(cols = tuning_fit)
-  
+  # browser()
   tune_vars <-
     colnames(best_params)[!colnames(best_params) %in% c(".pred", "observed","id","grid_row")]
   
@@ -517,15 +517,14 @@ fit_ml_salmon <- function(dep_age,
     group_by(!!!rlang::parse_exprs(tune_vars)) %>%
     yardstick::rmse(observed, .pred) %>%
     ungroup()
-  
-  # a = best_params %>% 
+
+  # a = best_params %>%
   #   pivot_longer(min_n:trees, names_to = "dial", values_to = "value")
-  # 
-  # a %>% 
-  #   ggplot(aes(value, .estimate)) + 
-  #   geom_point() + 
+  # a %>%
+  #   ggplot(aes(value, .estimate)) +
+  #   geom_point() +
   #   facet_wrap(~dial, scales = "free_x")
-  # 
+
   # browser()
   # best_params <- best_params %>%
   #   group_by(!!!rlang::parse_exprs(tune_vars)) %>%
@@ -707,7 +706,7 @@ fit_ml_salmon <- function(dep_age,
   #   group_by(split, ret_yr) %>%
   #   count() %>%
   #   View()
-  
+  # browser()
   # salmon_data %>%
   #   ggplot(aes(ret, pred, color = factor(ret_yr))) +
   #   geom_abline(aes(intercept = 0, slope = 1)) +

@@ -8,21 +8,22 @@
 
 # load ------------------------------------------------------------------------
 
-functions <- list.files(here::here("functions"))
+# functions <- list.files(here::here("functions"))
 #
-purrr::walk(functions, ~ source(here::here("functions", .x)))
+# purrr::walk(functions, ~ source(here::here("functions", .x)))
 #
-prep_run(results_name = "v0.5", results_description = "testing machine learning")
+# prep_run(results_name = "v0.5", results_description = "testing machine learning")
 
+# if (!dir.exists(file.path(results_dir,"figs"))) {
+#   
+#   dir.create(file.path(results_dir, "figs"), recursive = TRUE)
+#   
+#   dir.create(file.path(results_dir, "fits"), recursive = TRUE)
+#   
+# }
 set.seed(42)
 
-if (!dir.exists(file.path(results_dir,"figs"))) {
-  
-  dir.create(file.path(results_dir, "figs"), recursive = TRUE)
-  
-  dir.create(file.path(results_dir, "fits"), recursive = TRUE)
-  
-}
+
 
 
 #aha,
@@ -43,7 +44,7 @@ fit_rnn_models <- TRUE
 
 run_query_erddap <-  TRUE
 
-run_next_forecast <- FALSE
+run_next_forecast <- TRUE
 
 by_system <- TRUE
 
@@ -516,6 +517,7 @@ autocorr <- data %>%
 looframe <-
   tidyr::expand_grid(
     pred_system = if(by_system){unique(top_systems$system)}else {"all"},
+    # dep_age = c("1.2","1.3"),
     dep_age = top_age_groups,
     test_year = first_year:last_year,
     model_type = c("rand_forest","boost_tree"),
@@ -525,7 +527,7 @@ looframe <-
     use_spatial_enviro = c(FALSE),
     factor_years = c(FALSE),
     log_returns = c(FALSE),
-    assess = c(1),
+    assess = c(2),
     delta_returns = c(FALSE),
     omit_nas = c(FALSE)
   ) %>% 
@@ -566,7 +568,7 @@ if (fit_parsnip_models == TRUE){
             freshwater_cohort = freshwater_cohort,
             weight = weight_returns,
             trees = trees,
-            initial_prop = 0.75,
+            initial_prop = 0.8,
             forecast = FALSE,
             .progress = TRUE
           ))
@@ -580,11 +582,26 @@ if (fit_parsnip_models == TRUE){
 
 
 
+# huh <- loo_preds %>% 
+#   filter(model_type == "boost_tree",
+#          dep_age == "2.2") %>% 
+#   mutate(i = 1:nrow(.)) %>% 
+#   mutate(best_params = map(pred, "best_params")) %>% 
+#   select(-pred) %>% 
+#   unnest(cols = best_params) %>% 
+#   group_by(i) %>% 
+#   filter(.estimate == min(.estimate))
+# 
+# hist(huh$learn_rate)
+
+
+
+
 
 # run recurrent neural nets -----------------------------------------------
 
 if (fit_rnn_models == TRUE) {
-  
+  message("starting neural nets")
   rnn_experiments <- purrr::cross_df(
     list(
       engineering = c("scale"),
@@ -1108,18 +1125,19 @@ forecast_fit <- predframe %>%
   mutate(
     pred = future_pmap(
       list(dep_age = dep_age,
-           test_year = test_year),
+           test_year = test_year,
+           pred_system = pred_system,
+           model_type = model_type),
       fit_ml_salmon,
-      model_type = best_performer$model_type,
-      use_wide_cohorts = best_performer$use_wide_cohorts,
-      use_spatial_enviro = best_performer$use_spatial_enviro,
-      use_full_cohorts = best_performer$use_full_cohorts,
-      use_years = best_performer$use_years,
-      log_returns = best_performer$log_returns,
-      delta_returns = best_performer$delta_returns,
-      omit_nas = best_performer$omit_nas,
-      assess = best_performer$assess,
-      factor_years = best_performer$factor_years,
+      use_wide_cohorts = best_performer$use_wide_cohorts[1],
+      use_spatial_enviro = best_performer$use_spatial_enviro[1],
+      use_full_cohorts = best_performer$use_full_cohorts[1],
+      use_years = best_performer$use_years[1],
+      log_returns = best_performer$log_returns[1],
+      delta_returns = best_performer$delta_returns[1],
+      omit_nas = best_performer$omit_nas[1],
+      assess = best_performer$assess[1],
+      factor_years = best_performer$factor_years[1],
       data = data,
       scalar = scalar,
       freshwater_cohort = freshwater_cohort,
@@ -1149,21 +1167,21 @@ next_forecast <- forecast_fit %>%
 
 
 next_forecast %>% 
-  group_by(ret_yr) %>% 
+  group_by(ret_yr, model_type) %>% 
   summarise(observed = sum(ret),
             predicted = sum(pred)) %>% 
   ggplot() + 
   geom_point(aes(ret_yr, observed)) + 
-  geom_line(aes(ret_yr, predicted), color = "red")
+  geom_line(aes(ret_yr, predicted, color = model_type))
 
 
 next_forecast %>% 
-  group_by(ret_yr, dep_age) %>% 
+  group_by(ret_yr, dep_age,model_type) %>% 
   summarise(observed = sum(ret),
             predicted = sum(pred)) %>% 
   ggplot() + 
   geom_point(aes(ret_yr, observed)) + 
-  geom_line(aes(ret_yr, predicted), color = "red") + 
+  geom_line(aes(ret_yr, predicted, color = model_type)) + 
   facet_wrap(~dep_age, scales = "free_y")
 
 
@@ -1446,9 +1464,9 @@ raw_forecast_table <- next_forecast %>%
   ungroup() %>% 
   mutate(
     age_group= forcats::fct_relevel(age_group, c("1.2","1.3","2.2","2.3"))) %>% 
-  select(ret_yr, system, age_group, forecast) %>% 
-  bind_rows(ml_forecast %>% select(-model_type)) %>% 
-  group_by(system, ret_yr) %>%
+  select(ret_yr, system, age_group, forecast, model_type) %>% 
+  bind_rows(ml_forecast) %>% 
+  group_by(system, ret_yr, model_type) %>%
   mutate(forecast = forecast * 1000) %>% 
   mutate(Totals = sum(forecast)) %>%
   ungroup() %>% 
@@ -1463,7 +1481,7 @@ total_vars <- colnames(raw_forecast_table)
 total_vars <- total_vars[str_detect(total_vars,"(\\.)|(Totals)")]
 
 forecast_table <- raw_forecast_table %>%
-  group_by(ret_yr) %>%
+  group_by(ret_yr, model_type) %>%
   gt(rowname_col = "system") %>%
   summary_rows(
     groups = TRUE,
@@ -1480,7 +1498,7 @@ forecast_table <- raw_forecast_table %>%
   gt::tab_style(
     style = cell_text(weight = "bold"),
     locations = list(cells_summary(),
-                     cells_data(columns = vars(Totals)))
+                     cells_body(columns = vars(Totals)))
   )
 
 forecast_table
