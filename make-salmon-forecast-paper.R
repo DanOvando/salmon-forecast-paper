@@ -10,17 +10,17 @@ functions <- list.files(here::here("functions"))
 
 purrr::walk(functions, ~ source(here::here("functions", .x)))
 
-prep_run(results_name = "v0.7", results_description = "draft publication with boost tree improvements loo starting in 1990")
+prep_run(results_name = "v0.5", results_description = "draft publication with boost tree improvements loo starting in 1990")
 
 first_year <- 1990
 
 last_year <- 2019
 
-run_edm_forecast <- TRUE
+run_edm_forecast <- FALSE
 
-run_dlm_forecast <- TRUE
+run_dlm_forecast <- FALSE
 
-run_ml_forecast <- TRUE
+run_ml_forecast <- FALSE
 
 extrafont::loadfonts()
 
