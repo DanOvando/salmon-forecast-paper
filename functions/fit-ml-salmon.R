@@ -1,24 +1,25 @@
-fit_salmon <- function(dep_age,
-                       test_year,
-                       data,
-                       scalar = 10000,
-                       freshwater_cohort = TRUE,
-                       weight = FALSE,
-                       trees = 1000,
-                       log_returns = FALSE,
-                       use_wide_cohorts = FALSE,
-                       use_full_cohorts = FALSE,
-                       use_spatial_enviro = TRUE,
-                       use_years = TRUE,
-                       omit_nas = TRUE,
-                       delta_returns = FALSE,
-                       model_type = "rand_forest",
-                       n_mtry = 3,
-                       initial_prop = 0.75,
-                       assess = 3,
-                       factor_years = FALSE,
-                       produce = "summary",
-                       forecast = TRUE) {
+fit_ml_salmon <- function(dep_age,
+                          pred_system,
+                          test_year,
+                          data,
+                          scalar = 10000,
+                          freshwater_cohort = TRUE,
+                          weight = FALSE,
+                          trees = 1000,
+                          log_returns = FALSE,
+                          use_wide_cohorts = FALSE,
+                          use_full_cohorts = FALSE,
+                          use_spatial_enviro = TRUE,
+                          use_years = TRUE,
+                          omit_nas = TRUE,
+                          delta_returns = FALSE,
+                          model_type = "rand_forest",
+                          n_mtry = 3,
+                          initial_prop = 0.75,
+                          assess = 3,
+                          factor_years = FALSE,
+                          produce = "summary",
+                          forecast = TRUE) {
   # message(paste0("Running ", model_type))
   age <-
     sum(as.numeric(str_split(dep_age, "\\.", simplify = TRUE)))  + 1 # plus one to account for brood years
@@ -222,7 +223,7 @@ fit_salmon <- function(dep_age,
     mutate(ret_yr = ret_yr + 1,
            brood_yr = brood_yr + 1,
            ret = -999)
-
+  
   salmon_data <- data %>% {
     if (forecast) {
       bind_rows(., forecast_data)
@@ -287,6 +288,13 @@ fit_salmon <- function(dep_age,
   }
   
   
+  
+  if (pred_system != "all"){
+    salmon_data <- salmon_data %>% 
+      filter(system == pred_system)  %>% 
+      select(-system)
+  }
+  
   # a %>%
   #   ggplot(aes(spawner_strength, ret, color = system)) +
   #   geom_point()
@@ -304,6 +312,8 @@ fit_salmon <- function(dep_age,
   #                                    hjust = 1))
   salmon_train <- salmon_data %>%
     filter(ret_yr < test_year)
+  
+  
   
   # salmon_recipe <- recipe(ret ~ ., data = salmon_train) %>%
   #   step_center(contains("env_")) %>%
@@ -330,7 +340,7 @@ fit_salmon <- function(dep_age,
   
   annual_returns <-
     salmon_train %>% group_by(year) %>% nest() %>% ungroup()
-  
+
   salmon_rolling_origin <- rsample::rolling_origin(
     annual_returns,
     initial =  round(nrow(annual_returns) * initial_prop),
@@ -349,6 +359,7 @@ fit_salmon <- function(dep_age,
   
   # tune_grid <- tune_grid %>%
   #   slice(1)
+  
   salmon_recipe <-
     recipe(ret ~ ., data = salmon_train) %>% {
       if (log_returns == TRUE) {
@@ -357,10 +368,12 @@ fit_salmon <- function(dep_age,
         .
       }
     } %>% {
-      if (omit_nas) {
-        step_naomit(., all_predictors())
-      } else {
-        step_meanimpute(., all_predictors())
+      if (!omit_nas) {
+        # step_meanimpute(., all_predictors())
+        step_knnimpute(., all_predictors(), impute_with = "ret_yr", neighbors = 4)
+        
+      } else{
+        .
       }
     } %>%
     {
@@ -374,8 +387,8 @@ fit_salmon <- function(dep_age,
         .
       }
     } %>%
-    step_center(all_numeric(), -all_outcomes(),-contains("age_")) %>%
-    step_scale(all_numeric(), -all_outcomes(),-contains("age_")) %>%
+    # step_center(all_numeric(), -all_outcomes(),-contains("age_")) %>%
+    # step_scale(all_numeric(), -all_outcomes(),-contains("age_")) %>%
     step_corr(all_numeric(),-all_outcomes(),-contains("age_")) %>% {
       if (use_spatial_enviro) {
         step_pca(., contains("lat"), num_comp = 5)
@@ -388,16 +401,16 @@ fit_salmon <- function(dep_age,
       } else {
         step_dummy(., all_nominal(), one_hot = FALSE)
       }
-    } #%>%
-   # step_nzv(-all_outcomes())
-  
+    } %>%
+    step_nzv(all_predictors()) %>% 
+    step_naomit(all_predictors())
   
   prepped_salmon <-
     prep(salmon_recipe, data = salmon_train, retain = TRUE)
   
   baked_salmon <-
     bake(prepped_salmon, new_data = salmon_train)
-
+  
   if (model_type == "rand_forest") {
     # tune_grid <- tidyr::expand_grid(
     #   splitrule = c("variance"),
@@ -434,17 +447,32 @@ fit_salmon <- function(dep_age,
     # ) %>%
     #   left_join(salmon_rolling_origin, by = "id")
     # 
-
-    tune_grid <- parameters(min_n(), tree_depth(), learn_rate(), mtry(), trees())  %>% 
+    
+    # xgb_spec <- boost_tree(
+    #   trees = 1000, 
+    #   tree_depth = tune(), 
+    #   min_n = tune(), 
+    #   loss_reduction = tune(),                     ## first three: model complexity
+    #   sample_size = tune(), 
+    #   mtry = tune(),         ## randomness
+    #   learn_rate = tune(),                         ## step size
+    # ) %>% 
+    #   set_engine("xgboost") %>% 
+    #   set_mode("classification")
+    # 
+    
+    tune_grid <- parameters(min_n(range(2,10)), tree_depth(range(4,15)), learn_rate(range = c(-2,0)), mtry(),
+                            loss_reduction(),sample_size(range = c(1,1)), trees(range = c(500,2000)))%>% 
       dials::finalize(mtry(), x = baked_salmon %>% select(-(1:2)))
     
-    xgboost_grid <- grid_max_entropy(tune_grid, size = 15) %>% 
-      mutate(grid_row = 1:nrow(.))
+    xgboost_grid <- grid_max_entropy(tune_grid, size = 30) %>% 
+      mutate(grid_row = 1:nrow(.)) %>% 
+      mutate(trees = trees)
     
     tune_grid <- tidyr::expand_grid(grid_row = 1:nrow(xgboost_grid), id = unique(salmon_rolling_origin$id)) %>% 
       left_join(xgboost_grid, by = "grid_row") %>% 
       left_join(salmon_rolling_origin, by = "id")
-
+    
   }
   
   if (model_type == "mars") {
@@ -464,7 +492,7 @@ fit_salmon <- function(dep_age,
     as.list()
   
   # View(juice(prepped_salmon))
-  
+  # a <- Sys.time()
   tuning_fit <- pmap(
     tune_pars,
     tune_salmon,
@@ -473,25 +501,36 @@ fit_salmon <- function(dep_age,
     log_returns = log_returns
   )
   
+  # b <- Sys.time() - a
+  # browser()
   tune_grid$tuning_fit <- tuning_fit
   
   
   best_params <- tune_grid %>%
     select(-splits) %>%
     unnest(cols = tuning_fit)
-  
+  # browser()
   tune_vars <-
-    colnames(best_params)[!colnames(best_params) %in% c(".pred", "observed","id")]
-
+    colnames(best_params)[!colnames(best_params) %in% c(".pred", "observed","id","grid_row")]
+  
   best_params <- best_params %>%
     group_by(!!!rlang::parse_exprs(tune_vars)) %>%
     yardstick::rmse(observed, .pred) %>%
     ungroup()
+
+  # a = best_params %>%
+  #   pivot_longer(min_n:trees, names_to = "dial", values_to = "value")
+  # a %>%
+  #   ggplot(aes(value, .estimate)) +
+  #   geom_point() +
+  #   facet_wrap(~dial, scales = "free_x")
+
+  # browser()
   # best_params <- best_params %>%
   #   group_by(!!!rlang::parse_exprs(tune_vars)) %>%
   #   summarise(.estimate = mean(atan(abs((observed -.pred) / observed))))
   
-
+  
   # best_params <- best_params %>%
   #   group_by(!!!rlang::parse_exprs(tune_vars)) %>%
   #   yardstick::mape(observed, .pred)
@@ -499,22 +538,22 @@ fit_salmon <- function(dep_age,
   # best_params <- best_params %>%
   #   group_by(!!!rlang::parse_exprs(tune_vars)) %>%
   #   summarise(.estimate = mean(atan(abs((observed -.pred) / observed))))
-
+  
   # browser()
   # best_params %>%
   #   ggplot(aes(mtry, .estimate, color = factor(min_n))) +
   #   geom_point()
-  
+  # 
   # best_params %>%
   #   ggplot(aes(mtry, .estimate, color = splitrule)) +
   #   geom_point() +
   #   facet_wrap(~min_n)
-# browser()
-#   best_params %>%
-#     ggplot(aes(mtry, .estimate, color = (trees))) +
-#     geom_point() +
-#     facet_grid(tree_depth~learn_rate)
-
+  # browser()
+  # best_params %>%
+  #   ggplot(aes(mtry, .estimate, color = (trees))) +
+  #   geom_point() +
+  #   facet_grid(tree_depth~learn_rate)
+  
   best <- best_params %>%
     filter(.estimate == min(.estimate)) %>%
     dplyr::slice(1)
@@ -531,7 +570,6 @@ fit_salmon <- function(dep_age,
                           importance = "none",
                           splitrule = best$splitrule) %>%
       parsnip::fit(formula(prepped_salmon), data = juice(prepped_salmon))
-    
     # importance(trained_model$fit) %>%
     #   broom::tidy() %>%
     #   View()
@@ -557,17 +595,21 @@ fit_salmon <- function(dep_age,
     
   } # close model_type == "random_forest"
   if (model_type == "boost_tree") {
+    
     trained_model <-
       parsnip::boost_tree(
         mode = "regression",
         mtry = best$mtry,
+        min_n = best$min_n,
+        loss_reduction = best$loss_reduction,
+        sample_size = best$sample_size, 
         learn_rate = best$learn_rate,
         tree_depth = best$tree_depth,
         trees = best$trees
       ) %>%
       parsnip::set_engine("xgboost") %>%
       parsnip::fit(formula(prepped_salmon), data = juice(prepped_salmon))
-    
+    # browser()
     # importance_matrix <- xgboost::xgb.importance(colnames(juice(prepped_salmon)), model = trained_model$fit)
     #
     #
@@ -587,10 +629,11 @@ fit_salmon <- function(dep_age,
     
   } # close if model type is MARS
   
-  
   # a =  bake(prepped_salmon, salmon_data)
   pred <-
     predict(trained_model, new_data = bake(prepped_salmon, salmon_data))
+  
+  
   if (delta_returns) {
     salmon_data$ret <- ogret
     
@@ -602,6 +645,12 @@ fit_salmon <- function(dep_age,
   
   salmon_data$pred <-
     dplyr::case_when(log_returns == TRUE ~ exp(pred$.pred), TRUE ~  pred$.pred)
+  
+  if (pred_system != "all"){
+    
+    salmon_data$system <- pred_system
+    
+  }
   
   if (delta_returns) {
     salmon_data$pred[salmon_data$ret_yr < test_year] <-
@@ -649,13 +698,15 @@ fit_salmon <- function(dep_age,
       pred = pred * scalar
     )
   
+  # browser()
+  
   salmon_data$ret[salmon_data$split == "forecast"] <-  NA
   #
   # test %>%
   #   group_by(split, ret_yr) %>%
   #   count() %>%
   #   View()
-  
+  # browser()
   # salmon_data %>%
   #   ggplot(aes(ret, pred, color = factor(ret_yr))) +
   #   geom_abline(aes(intercept = 0, slope = 1)) +

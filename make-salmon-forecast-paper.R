@@ -10,12 +10,11 @@ functions <- list.files(here::here("functions"))
 
 purrr::walk(functions, ~ source(here::here("functions", .x)))
 
-prep_run(results_name = "v0.5", results_description = "draft publication")
+prep_run(results_name = "v0.5", results_description = "draft publication with boost tree improvements loo starting in 1990")
 
-first_year <- 2000
+first_year <- 1990
 
 last_year <- 2019
-
 
 run_edm_forecast <- FALSE
 
@@ -64,7 +63,7 @@ published_forecasts <-
   get_published_fcst(
     dir.pf = here(file.path("data", "preseasonForecast.dat")),
     dir.ids = here(file.path("data", "ID_Systems.csv")),
-    years = 2000:last_year
+    years = 1990:last_year
   ) %>%
   rename(forecast = FRIfcst) %>%
   mutate(model = "fri_forecast") %>% 
@@ -271,25 +270,25 @@ system_performance_plot <- system_performance %>%
 
 system_performance_plot
 
-age_system_performance_plot <-  age_system_performance %>% 
-  group_by(age_group, system) %>% 
-  mutate(ml_improvement = (rmse[model == "lag"] - rmse[model == "boost_tree"]) /  rmse[model == "lag"],
-         ref_rmse =rmse[model == "lag"],
-         sd_rmse = sd(rmse)) %>% 
-  filter(r2 == min(r2))  %>%
-  ungroup() %>% 
-  mutate(scaled_rmse = -(ref_rmse - rmse) / ref_rmse,
-         fface = ifelse(model == "boost_tree", "italic","plain")) %>% 
-  ggplot(aes(system, age_group, label = model,color = scaled_rmse)) + 
-  geom_text(size = 7, aes(fontface = fface)) + 
-  theme_bw() + 
-  scale_color_gradient(low = "tomato", high = "steelblue", 
-                       labels = scales::percent,
-                       name = "% Reduction in RMSE",
-                       limits = c(-.75,0), 
-                       breaks = seq(-.75,0, by = 0.25))
-
-age_system_performance_plot
+# age_system_performance_plot <-  age_system_performance %>% 
+#   group_by(age_group, system) %>% 
+#   mutate(ml_improvement = (rmse[model == "lag"] - rmse[model == "boost_tree"]) /  rmse[model == "lag"],
+#          ref_rmse =rmse[model == "lag"],
+#          sd_rmse = sd(rmse)) %>% 
+#   filter(r2 == min(r2))  %>%
+#   ungroup() %>% 
+#   mutate(scaled_rmse = -(ref_rmse - rmse) / ref_rmse,
+#          fface = ifelse(model == "boost_tree", "italic","plain")) %>% 
+#   ggplot(aes(system, age_group, label = model,color = scaled_rmse)) + 
+#   geom_text(size = 7, aes(fontface = fface)) + 
+#   theme_bw() + 
+#   scale_color_gradient(low = "tomato", high = "steelblue", 
+#                        labels = scales::percent,
+#                        name = "% Reduction in RMSE",
+#                        limits = c(-.75,0), 
+#                        breaks = seq(-.75,0, by = 0.25))
+# 
+# age_system_performance_plot
 
 
 # save things -------------------------------------------------------------
@@ -740,21 +739,40 @@ figure_1 <-  (total_return_plot / system_return_plot / age_return_plot)
 
 # figure 3 ----------------------------------------------------------------
 
+pal <- pnw_palette("Winter",n = n_distinct(system_performance$model))
+
 top_models <- system_performance %>% 
   group_by(system) %>% 
+  # filter(model == "dlm") %>%
   filter(rmse == min(rmse)) %>% 
   mutate(combo = paste(system, model, sep = "_"))
 
+next_best <- system_performance %>% 
+  group_by(system) %>% 
+  mutate(model_rank = rank(rmse)) %>% 
+  filter(model_rank < 3) %>% 
+  arrange(system)  %>% 
+  summarise(model = model[model_rank == 1],
+            percent_improvement = abs(rmse[model_rank == 1] / rmse[model_rank == 2] - 1))
+
+
 top_system_forecast <- system_forecast %>% 
   mutate(combo = paste(system, model, sep = "_")) %>% 
-  filter(combo %in% top_models$combo)
+  # filter(model %in% "boost_tree") %>%
+  filter(combo %in% top_models$combo) %>%
+  left_join(next_best, by = c("model", "system"))
 
 system_forecast_figure <- top_system_forecast %>% 
   ggplot() + 
-  geom_area(aes(year, observed)) + 
-  geom_line(aes(year, forecast, color = model)) +
-  geom_point(aes(year, forecast, fill = model), shape = 21, size = 4) +
-  facet_wrap(~system, scales = "free_y")
+  geom_area(aes(year, observed), fill = "darkgray") + 
+  geom_point(aes(year, forecast, fill = model, alpha = percent_improvement), shape = 21, size = 3) +
+  facet_wrap(~system, scales = "free_y") + 
+  fishualize::scale_fill_fish_d(option = "Trimma_lantana") + 
+  fishualize::scale_color_fish_d(option = "Trimma_lantana") + 
+  scale_alpha_continuous(range = c(0.25,1), labels = percent, name = "% Improvement on 2nd Best Model") + 
+  scale_y_continuous(expand = expansion(c(0,.05)), name = "Returns")
+
+system_forecast_figure
 
 
 # figure 4 ----------------------------------------------------------------
@@ -775,6 +793,31 @@ age_forecast_figure <- top_age_forecast %>%
   geom_line(aes(year, forecast, color = model)) +
   geom_point(aes(year, forecast, fill = model), shape = 21, size = 4) +
   facet_wrap(~age_group, scales = "free_y")
+
+next_best <- age_performance %>% 
+  group_by(age_group) %>% 
+  mutate(model_rank = rank(rmse)) %>% 
+  filter(model_rank < 3) %>% 
+  arrange(age_group)  %>% 
+  summarise(model = model[model_rank == 1],
+            percent_improvement = abs(rmse[model_rank == 1] / rmse[model_rank == 2] - 1))
+
+
+top_age_forecast <- age_forecast %>% 
+  mutate(combo = paste(age_group, model, sep = "_")) %>% 
+  filter(combo %in% top_models$combo) %>% 
+  left_join(next_best, by = c("model", "age_group"))
+
+
+age_forecast_figure <- top_age_forecast %>% 
+  ggplot() + 
+  geom_area(aes(year, observed), fill = "darkgray") + 
+  geom_point(aes(year, forecast, fill = model, alpha = percent_improvement), shape = 21, size = 3) +
+  facet_wrap(~age_group, scales = "free_y") + 
+  fishualize::scale_fill_fish_d(option = "Trimma_lantana") + 
+  fishualize::scale_color_fish_d(option = "Trimma_lantana") + 
+  scale_alpha_continuous(range = c(0.25,1), labels = percent, name = "% Improvement on 2nd Best Model") + 
+  scale_y_continuous(expand = expansion(c(0,.05)), name = "Returns")
 
 
 age_forecast_figure

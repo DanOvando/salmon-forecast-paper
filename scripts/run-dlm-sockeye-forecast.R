@@ -43,7 +43,7 @@ dir.create(dir.out, recursive=TRUE)
 # results_dir <- here::here("results")
 
 # Controls for 1-step ahead prediction
-years <- 2000:2019
+years <- 1990:2019
 n.years <- length(years)
 
 stocks <- c('Kvichak','Alagnak','Naknek','Egegik','Ugashik','Igushik','Wood','Nushagak','Togiak')
