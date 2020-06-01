@@ -22,6 +22,8 @@ run_dlm_forecast <- FALSE
 
 run_ml_forecast <- FALSE
 
+scalar <- 1000
+
 extrafont::loadfonts()
 
 pub_theme <-
@@ -103,10 +105,20 @@ results <- list.files(results_dir)
 
 results <- results[str_detect(results,"_loo_results.csv")]
 
+
+observed_returns <- data %>% 
+  unite(col = "age_group",fw_age, o_age, sep = '_') %>% 
+  select(system, age_group, ret_yr, ret) %>% 
+  rename(observed = ret)
+
+# adding in observed data from scratch, since there are some rounding errors cropping up in the 
+# observed data in each data frame
 forecasts <- map_df(results, ~read_csv(file.path(results_dir,.x))) %>% 
   rename(year = return_year,
          forecast = predicted_returns,
          observed = observed_returns) %>% 
+  select(-observed) %>% 
+  left_join(observed_returns, by = c("system", "year" = "ret_yr", "age_group")) %>% 
   filter(age_group %in% top_age_groups,
          system != "Alagnak", system != "Togiak") %>% 
   mutate(model = str_remove_all(model, "_forecast")) %>% 
@@ -665,6 +677,170 @@ system_performance %>%
 
 
 
+# construct statistical ensemble ------------------------------------------
+
+# what should an emsemble look like? Depends a bit on the scale, but for now let's try it at the
+# finest resolution possible
+
+# a = (forecasts %>% filter(year == 1990, system == "Naknek"))
+# 
+# b <- pivot_wider(a, names_from = "model", values_from = "forecast")
+
+a = (forecasts %>% filter(year == 1974, system == "Igushik"))
+
+b <- pivot_wider(a, names_from = "model", values_from = "forecast")
+
+
+ensemble_data <- forecasts %>% 
+  mutate(observed = observed / scalar,
+         forecast = forecast / scalar) %>% 
+  group_by(model, system, age_group) %>%
+  arrange(year) %>%
+  mutate(last_observed = lag(observed, 1)) %>%
+  filter(year > first_year) %>% 
+  ungroup() %>% 
+  pivot_wider(names_from = "model", values_from = "forecast") %>% 
+  group_by(system) %>% 
+  mutate(sys_weight = 1 / length(observed))%>% 
+  ungroup()
+  # mutate(return_rank = percent_rank(observed)) %>% 
+  # mutate(return_type = case_when(return_rank > 0.66 ~ "boom", return_rank < 0.33 ~ "bust", TRUE ~ "meh"))
+
+ensemble_data[is.na(ensemble_data)] <- -999
+
+ensemble_data <- ensemble_data %>% 
+  arrange(year)
+
+training_prop <- last(which(ensemble_data$year < 2010)) / nrow(ensemble_data)
+
+
+ensemble_split <- initial_time_split(ensemble_data, prop = training_prop)
+
+
+training_ensemble_data <- training(ensemble_split)
+
+testing_ensemble_data <- testing(ensemble_split)
+
+ensemble_splits <- rsample::group_vfold_cv(training_ensemble_data, group = year)
+
+tune_grid <- parameters(min_n(), mtry(), trees())  %>%
+  dials::finalize(mtry(), x = training_ensemble_data %>% select(-(1:2)))
+
+ranger_grid <- grid_max_entropy(tune_grid, size = 10) 
+
+ranger_model <-
+  parsnip::rand_forest(
+    mode = "regression",
+    mtry = tune(),
+    min_n = tune(),
+    trees = tune()
+  ) %>%
+  parsnip::set_engine("ranger")
+
+
+ranger_workflow <- workflows::workflow() %>% 
+  add_formula(observed ~ .) %>% 
+  add_model(ranger_model)
+
+set.seed(234)
+doParallel::registerDoParallel(cores = parallel::detectCores() - 2)
+ranger_tuning <- tune_grid(
+  ranger_workflow,
+  resamples = ensemble_splits,
+  grid = ranger_grid,
+  control = control_grid(save_pred = TRUE)
+)
+
+ranger_tuning
+
+collect_metrics(ranger_tuning) %>% 
+  select(mean, mtry:min_n, .metric) %>% 
+  pivot_longer(mtry:min_n, names_to = "dial", values_to = "level") %>% 
+  ggplot(aes(level, mean)) + 
+  geom_point() + 
+  facet_wrap(.metric ~ dial, scales = "free")
+
+show_best(ranger_tuning, "rmse")
+
+best_rmse <- tune::select_best(ranger_tuning, metric = "rmse")
+
+final_ranger_model <- finalize_workflow(
+  ranger_workflow,
+  best_rmse
+)
+
+# final_ranger_model %>%
+#   fit(data = training_ensemble_data) %>%
+#   pull_workflow_fit() %>%
+#   vip::vip(geom = "point")
+# 
+# ensemble_fits <- last_fit(
+#   final_ranger_model,
+#   ensemble_split
+# )
+
+
+# stan_ensemble_model <- stan_glm(observed ~ forecast:model)
+
+ranger_ensemble_model <- ranger(observed ~ ., data = training_ensemble_data %>% select(-last_observed),
+                                importance = "impurity_corrected",
+                                mtry = best_rmse$mtry,
+                                min.node.size = best_rmse$min_n,
+                                num.trees = best_rmse$trees,
+                                case.weights = training_ensemble_data$sys_weight)
+
+# ranger_ensemble_model <- ranger(observed ~ ., data = training_ensemble_data %>% select(-last_observed),
+#                                 importance = "impurity_corrected")
+
+# vip::vi(ranger_ensemble_model) %>% 
+#   vip::vip()
+
+training_ensemble_data$ensemble_forecast <- ranger_ensemble_model$predictions
+
+testing_ensemble_data$ensemble_forecast <- predict(ranger_ensemble_model, data = testing_ensemble_data)$predictions
+
+ensemble_forecasts <- training_ensemble_data %>% 
+  bind_rows(testing_ensemble_data) %>% 
+  mutate(set = ifelse(year >=2010, "testing", "training"))
+  
+ensemble_forecasts %>% 
+  ggplot(aes(observed, ensemble_forecast)) + 
+  geom_point() + 
+  geom_abline(aes(slope = 1, intercept = 0)) +
+  facet_wrap(~set)
+
+ensemble_forecasts %>% 
+  group_by(year) %>% 
+  summarise(observed = sum(observed),
+            ensemble_forecast = sum(ensemble_forecast)) %>% 
+  ungroup() %>% 
+  ggplot() +
+  geom_col(aes(year, observed)) + 
+  geom_point(aes(year, ensemble_forecast))
+
+ensemble_forecasts %>% 
+  group_by(year, age_group, set) %>% 
+  summarise(observed = sum(observed),
+            ensemble_forecast = sum(ensemble_forecast)) %>% 
+  ungroup() %>% 
+  ggplot(aes(fill = set)) +
+  geom_col(aes(year, observed)) + 
+  geom_point(aes(year, ensemble_forecast), shape = 21) + 
+  facet_wrap(~age_group)
+
+
+ensemble_forecasts %>% 
+  group_by(year, system) %>% 
+  summarise(observed = sum(observed),
+            ensemble_forecast = sum(ensemble_forecast)) %>% 
+  group_by(system) %>% 
+  mutate(observed = scale(observed),
+         ensemble_forecast = scale(ensemble_forecast)) %>% 
+  ungroup() %>% 
+  ggplot() +
+  geom_col(aes(year, observed)) + 
+  geom_point(aes(year, ensemble_forecast)) + 
+  facet_wrap(~system)
 
 
 # figure 1 ----------------------------------------------------------------
