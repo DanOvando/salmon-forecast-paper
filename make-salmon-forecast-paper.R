@@ -10,9 +10,9 @@ functions <- list.files(here::here("functions"))
 
 purrr::walk(functions, ~ source(here::here("functions", .x)))
 
-prep_run(results_name = "v0.6", results_description = "draft publication with boost tree improvements")
+prep_run(results_name = "v0.7", results_description = "draft publication with boost tree improvements loo starting in 1990")
 
-first_year <- 2000
+first_year <- 1990
 
 last_year <- 2019
 
@@ -63,7 +63,7 @@ published_forecasts <-
   get_published_fcst(
     dir.pf = here(file.path("data", "preseasonForecast.dat")),
     dir.ids = here(file.path("data", "ID_Systems.csv")),
-    years = 2000:last_year
+    years = 1990:last_year
   ) %>%
   rename(forecast = FRIfcst) %>%
   mutate(model = "fri_forecast") %>% 
@@ -743,7 +743,7 @@ pal <- pnw_palette("Winter",n = n_distinct(system_performance$model))
 
 top_models <- system_performance %>% 
   group_by(system) %>% 
-  # filter(model == "boost_tree") %>% 
+  # filter(model == "dlm") %>%
   filter(rmse == min(rmse)) %>% 
   mutate(combo = paste(system, model, sep = "_"))
 
@@ -772,7 +772,7 @@ system_forecast_figure <- top_system_forecast %>%
   scale_alpha_continuous(range = c(0.25,1), labels = percent, name = "% Improvement on 2nd Best Model") + 
   scale_y_continuous(expand = expansion(c(0,.05)), name = "Returns")
 
-
+system_forecast_figure
 
 
 # figure 4 ----------------------------------------------------------------

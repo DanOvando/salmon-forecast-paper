@@ -58,13 +58,13 @@ trees <- 1000
 
 freshwater_cohort <- TRUE #leave as true
 
+first_year <- 1990 # the first year splitting the test and training data
+
 last_year <- 2019 # the final year in the data
 
 min_year <- 1963 # only include data greater than or equal this year
 
 age_groups <- 4 #number of top age groups to include
-
-first_year <- 2000 # the first year splitting the test and training data
 
 scalar <- 10000
   #10000 # number do divide the total returns by just to get the data a bit closer to the -1 to 1 range
