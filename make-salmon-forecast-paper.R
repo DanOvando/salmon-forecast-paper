@@ -10,27 +10,28 @@ functions <- list.files(here::here("functions"))
 
 purrr::walk(functions, ~ source(here::here("functions", .x)))
 
-prep_run(results_name = "v0.5", results_description = "draft publication")
+prep_run(results_name = "v0.5", results_description = "draft publication with boost tree improvements loo starting in 1990")
 
-first_year <- 2000
+first_year <- 1990
 
 last_year <- 2019
 
+run_edm_forecast <- FALSE
 
-run_edm_forecast <- TRUE
+run_dlm_forecast <- FALSE
 
-run_dlm_forecast <- TRUE
-
-run_ml_forecast <- TRUE
+run_ml_forecast <- FALSE
 
 extrafont::loadfonts()
 
-pub_theme <- hrbrthemes::theme_ipsum(base_size = 10, axis_text_size = 12) + 
-  theme(panel.spacing = unit(1, "lines"))
+pub_theme <-
+  hrbrthemes::theme_ipsum(base_size = 10, axis_text_size = 12) +
+  theme(
+    panel.spacing = unit(1, "lines"),
+    plot.margin = unit(rep(10, 4), units = "points")
+  )
 
 theme_set(pub_theme)
-
-
 
 
 # run forecasts -----------------------------------------------------------
@@ -58,6 +59,18 @@ if (run_ml_forecast){
 
 # process forecasts -------------------------------------------------------
 
+published_forecasts <-
+  get_published_fcst(
+    dir.pf = here(file.path("data", "preseasonForecast.dat")),
+    dir.ids = here(file.path("data", "ID_Systems.csv")),
+    years = 1990:last_year
+  ) %>%
+  rename(forecast = FRIfcst) %>%
+  mutate(model = "fri_forecast") %>% 
+  janitor::clean_names() %>% 
+  rename(year = ret_yr) %>% 
+  mutate(age_group = paste(fw_age, o_age, sep = "_")) %>% 
+  as_tibble()
 
 
 
@@ -257,25 +270,25 @@ system_performance_plot <- system_performance %>%
 
 system_performance_plot
 
-age_system_performance_plot <-  age_system_performance %>% 
-  group_by(age_group, system) %>% 
-  mutate(ml_improvement = (rmse[model == "lag"] - rmse[model == "boost_tree"]) /  rmse[model == "lag"],
-         ref_rmse =rmse[model == "lag"],
-         sd_rmse = sd(rmse)) %>% 
-  filter(r2 == min(r2))  %>%
-  ungroup() %>% 
-  mutate(scaled_rmse = -(ref_rmse - rmse) / ref_rmse,
-         fface = ifelse(model == "boost_tree", "italic","plain")) %>% 
-  ggplot(aes(system, age_group, label = model,color = scaled_rmse)) + 
-  geom_text(size = 7, aes(fontface = fface)) + 
-  theme_bw() + 
-  scale_color_gradient(low = "tomato", high = "steelblue", 
-                       labels = scales::percent,
-                       name = "% Reduction in RMSE",
-                       limits = c(-.75,0), 
-                       breaks = seq(-.75,0, by = 0.25))
-
-age_system_performance_plot
+# age_system_performance_plot <-  age_system_performance %>% 
+#   group_by(age_group, system) %>% 
+#   mutate(ml_improvement = (rmse[model == "lag"] - rmse[model == "boost_tree"]) /  rmse[model == "lag"],
+#          ref_rmse =rmse[model == "lag"],
+#          sd_rmse = sd(rmse)) %>% 
+#   filter(r2 == min(r2))  %>%
+#   ungroup() %>% 
+#   mutate(scaled_rmse = -(ref_rmse - rmse) / ref_rmse,
+#          fface = ifelse(model == "boost_tree", "italic","plain")) %>% 
+#   ggplot(aes(system, age_group, label = model,color = scaled_rmse)) + 
+#   geom_text(size = 7, aes(fontface = fface)) + 
+#   theme_bw() + 
+#   scale_color_gradient(low = "tomato", high = "steelblue", 
+#                        labels = scales::percent,
+#                        name = "% Reduction in RMSE",
+#                        limits = c(-.75,0), 
+#                        breaks = seq(-.75,0, by = 0.25))
+# 
+# age_system_performance_plot
 
 
 # save things -------------------------------------------------------------
@@ -297,6 +310,7 @@ salmon_data <- data %>%
 
 write_rds(salmon_data, path = file.path(results_dir,"salmon_data.rds"))
 
+top_systems <- forecasts$system %>% unique()
 
 salmon_data <- salmon_data %>% 
   filter(age_group %in% top_age_groups) %>% 
@@ -304,17 +318,7 @@ salmon_data <- salmon_data %>%
 
 
 
-## -----------------------------------------------------------------------------
 
-return_plot <- salmon_data %>% 
-  group_by(year) %>% 
-  summarise(ret = sum(ret)) %>% 
-  ggplot(aes(year, ret)) + 
-  geom_col(alpha = 0.75) + 
-  scale_y_continuous(name = "Returns (millions)") + 
-  scale_x_continuous(name = '') 
-
-return_plot
 
 
 
@@ -661,9 +665,159 @@ system_performance %>%
 
 
 
-## -----------------------------------------------------------------------------
 
-plots <- ls()[str_detect(ls(), "_plot")]
+
+# figure 1 ----------------------------------------------------------------
+
+
+
+alaska <- rnaturalearth::ne_states( country = "united states of america", returnclass = "sf") %>% 
+  filter(name == "Alaska") %>% 
+  sf::st_transform(crs = 3467)
+
+alaska_bbox <- sf::st_bbox(alaska)
+
+bristol_bay_plot <- ggplot() + 
+  geom_sf(data = alaska) + 
+  coord_sf(xlim = alaska_bbox[c("xmin", "xmax")],
+           ylim = alaska_bbox[c("ymin", "ymax")]) +
+  ggthemes::theme_map() + 
+  labs(caption = "Placeholder for a map if needed; add in river systems?")
+
+
+total_return_plot <- salmon_data %>% 
+  group_by(year) %>% 
+  summarise(ret = sum(ret)) %>% 
+  ggplot(aes(year, ret)) + 
+  geom_area(alpha = 1) + 
+  scale_y_continuous(name = "Returns (millions)", expand = expansion()) + 
+  scale_x_continuous(name = '') + 
+  theme(axis.text.x = element_blank()) + 
+  labs(title = "A")
+
+total_return_plot
+
+
+
+system_return_plot <- salmon_data %>% 
+  filter(system %in% top_systems) %>% 
+  group_by(year, system) %>% 
+  summarise(ret = sum(ret)) %>% 
+  ggplot(aes(year, ret, fill = reorder(system,ret))) + 
+  geom_area(alpha = 1) + 
+  scale_y_continuous(name = "", expand = expansion()) + 
+  scale_x_continuous(name = '') +
+  scale_fill_viridis_d(name = 'System') + 
+  theme(axis.text.x = element_blank()) + 
+  labs(title = "B")
+
+
+system_return_plot
+
+age_return_plot <- salmon_data %>% 
+  filter(system %in% top_systems) %>% 
+  group_by(year, age_group) %>% 
+  summarise(ret = sum(ret)) %>% 
+  ggplot(aes(year, ret, fill = (age_group))) + 
+  geom_area(alpha = 1) + 
+  scale_y_continuous(name = "", expand = expansion()) + 
+  scale_x_continuous(name = 'Year') +
+  scale_fill_viridis_d(option = "plasma", name = 'Age Group') + 
+  labs(title = "C")
+
+
+age_return_plot
+
+figure_1 <-  (total_return_plot / system_return_plot / age_return_plot)
+
+
+# figure 2 ----------------------------------------------------------------
+
+# placeholder for summary of historic performance?
+
+
+
+# figure 3 ----------------------------------------------------------------
+
+pal <- pnw_palette("Winter",n = n_distinct(system_performance$model))
+
+top_models <- system_performance %>% 
+  group_by(system) %>% 
+  # filter(model == "dlm") %>%
+  filter(rmse == min(rmse)) %>% 
+  mutate(combo = paste(system, model, sep = "_"))
+
+next_best <- system_performance %>% 
+  group_by(system) %>% 
+  mutate(model_rank = rank(rmse)) %>% 
+  filter(model_rank < 3) %>% 
+  arrange(system)  %>% 
+  summarise(model = model[model_rank == 1],
+            percent_improvement = abs(rmse[model_rank == 1] / rmse[model_rank == 2] - 1))
+
+
+top_system_forecast <- system_forecast %>% 
+  mutate(combo = paste(system, model, sep = "_")) %>% 
+  # filter(model %in% "boost_tree") %>%
+  filter(combo %in% top_models$combo) %>%
+  left_join(next_best, by = c("model", "system"))
+
+system_forecast_figure <- top_system_forecast %>% 
+  ggplot() + 
+  geom_area(aes(year, observed), fill = "darkgray") + 
+  geom_point(aes(year, forecast, fill = model, alpha = percent_improvement), shape = 21, size = 3) +
+  facet_wrap(~system, scales = "free_y") + 
+  fishualize::scale_fill_fish_d(option = "Trimma_lantana") + 
+  fishualize::scale_color_fish_d(option = "Trimma_lantana") + 
+  scale_alpha_continuous(range = c(0.25,1), labels = percent, name = "% Improvement on 2nd Best Model") + 
+  scale_y_continuous(expand = expansion(c(0,.05)), name = "Returns")
+
+system_forecast_figure
+
+
+# figure 4 ----------------------------------------------------------------
+
+top_models <- age_performance %>% 
+  # filter(model == "boost_tree") %>% 
+  group_by(age_group) %>% 
+  filter(rmse == min(rmse)) %>% 
+  mutate(combo = paste(age_group, model, sep = "_")) %>% 
+  ungroup()
+
+
+next_best <- age_performance %>% 
+  group_by(age_group) %>% 
+  mutate(model_rank = rank(rmse)) %>% 
+  filter(model_rank < 3) %>% 
+  arrange(age_group)  %>% 
+  summarise(model = model[model_rank == 1],
+            percent_improvement = abs(rmse[model_rank == 1] / rmse[model_rank == 2] - 1))
+
+
+top_age_forecast <- age_forecast %>% 
+  mutate(combo = paste(age_group, model, sep = "_")) %>% 
+  filter(combo %in% top_models$combo) %>% 
+  left_join(next_best, by = c("model", "age_group"))
+
+
+age_forecast_figure <- top_age_forecast %>% 
+  ggplot() + 
+  geom_area(aes(year, observed), fill = "darkgray") + 
+  geom_point(aes(year, forecast, fill = model, alpha = percent_improvement), shape = 21, size = 3) +
+  facet_wrap(~age_group, scales = "free_y") + 
+  fishualize::scale_fill_fish_d(option = "Trimma_lantana") + 
+  fishualize::scale_color_fish_d(option = "Trimma_lantana") + 
+  scale_alpha_continuous(range = c(0.25,1), labels = percent, name = "% Improvement on 2nd Best Model") + 
+  scale_y_continuous(expand = expansion(c(0,.05)), name = "Returns")
+
+
+
+age_forecast_figure
+# save things -------------------------------------------------------------
+
+
+
+plots <- ls()[str_detect(ls(), "(_plot)|(_figure)")]
 
 fig_path <- file.path(results_dir,"figs")
 

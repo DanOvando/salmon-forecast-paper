@@ -9,18 +9,21 @@
 # load ------------------------------------------------------------------------
 
 # functions <- list.files(here::here("functions"))
-# #
+#
 # purrr::walk(functions, ~ source(here::here("functions", .x)))
-# #
+#
 # prep_run(results_name = "v0.5", results_description = "testing machine learning")
 
-if (!dir.exists(file.path(results_dir,"figs"))) {
-  
-  dir.create(file.path(results_dir, "figs"), recursive = TRUE)
-  
-  dir.create(file.path(results_dir, "fits"), recursive = TRUE)
-  
-}
+# if (!dir.exists(file.path(results_dir,"figs"))) {
+#   
+#   dir.create(file.path(results_dir, "figs"), recursive = TRUE)
+#   
+#   dir.create(file.path(results_dir, "fits"), recursive = TRUE)
+#   
+# }
+set.seed(42)
+
+
 
 
 #aha,
@@ -43,23 +46,25 @@ run_query_erddap <-  TRUE
 
 run_next_forecast <- TRUE
 
+by_system <- TRUE
+
 stride <- 4 #stride for errdaap data
 
 weight_returns <- FALSE
 
-cores <- parallel::detectCores() - 4
+cores <- parallel::detectCores() - 2
 
-trees <- 500
+trees <- 1000
 
 freshwater_cohort <- TRUE #leave as true
+
+first_year <- 1990 # the first year splitting the test and training data
 
 last_year <- 2019 # the final year in the data
 
 min_year <- 1963 # only include data greater than or equal this year
 
 age_groups <- 4 #number of top age groups to include
-
-first_year <- 2000 # the first year splitting the test and training data
 
 scalar <- 10000
   #10000 # number do divide the total returns by just to get the data a bit closer to the -1 to 1 range
@@ -496,58 +501,6 @@ data <- data %>%
 # write_csv(data, path = "bristol_bay_salmon_data.csv")
 
 # explore data ------------------------------------------------------------
-#
-# data %>%
-#   group_by(ret_yr, age_group) %>%
-#   summarise(tr = sum(ret)) %>%
-#   group_by(age_group) %>%
-#   mutate(str = scale(tr)) %>%
-#   ggplot(aes(ret_yr, str, color = age_group)) +
-#   geom_line(show.legend = FALSE) +
-#   facet_wrap(~ age_group) +
-# theme_minimal()
-
-# data %>%
-#   group_by(ret_yr) %>%
-#   summarise(tr = sum(ret)) %>%
-#   ungroup() %>%
-#   ggplot(aes(ret_yr, tr)) +
-#   geom_line()
-
-#
-# data %>%
-#   filter(ret_yr > 1963) %>%
-#   group_by(ret_yr, system) %>%
-#   summarise(tr = sum(ret)) %>%
-#   group_by(system) %>%
-#   mutate(rolling_mean = RcppRoll::roll_mean(tr, 20, fill = NA, align = "center")) %>%
-#   ungroup() %>%
-#   ggplot(aes(ret_yr, rolling_mean)) +
-#   geom_line() +
-#   facet_wrap( ~ system, scales = "free_y")
-#
-# data %>%
-#   filter(ret_yr > 1963) %>%
-#   group_by(ret_yr, system) %>%
-#   summarise(tr = sum(ret)) %>%
-#   group_by(system) %>%
-#   mutate(delta_tr = tr - lag(tr)) %>%
-#   ungroup() %>%
-#   ggplot(aes(ret_yr, delta_tr)) +
-#   geom_line() +
-#   facet_wrap( ~ system, scales = "free_y")
-
-#
-# data %>%
-#   filter(ret_yr > 1963) %>%
-#   group_by(ret_yr) %>%
-#   summarise(tr = sum(ret)) %>%
-#   ungroup() %>%
-#   mutate(delta_tr = tr - lag(tr)) %>%
-#   mutate(rolling_mean = RcppRoll::roll_mean(delta_tr, 20, fill = NA, align = "center")) %>%
-#   ggplot(aes(ret_yr, rolling_mean)) +
-#   geom_line()
-
 
 autocorr <- data %>%
   filter(ret_yr > 1963) %>%
@@ -559,20 +512,24 @@ autocorr <- data %>%
 
 # run leave-one-out time analysis -----------------------------------------
 
+
+
 looframe <-
   tidyr::expand_grid(
+    pred_system = if(by_system){unique(top_systems$system)}else {"all"},
+    # dep_age = c("1.2","1.3"),
     dep_age = top_age_groups,
     test_year = first_year:last_year,
     model_type = c("rand_forest","boost_tree"),
-    use_full_cohorts = c(FALSE,TRUE),
-    use_wide_cohorts = c(FALSE,TRUE),
+    use_full_cohorts = c(TRUE),
+    use_wide_cohorts = c(TRUE),
     use_years = c(TRUE),
     use_spatial_enviro = c(FALSE),
-    factor_years = c(FALSE,TRUE),
+    factor_years = c(FALSE),
     log_returns = c(FALSE),
-    assess = c(1),
+    assess = c(2),
     delta_returns = c(FALSE),
-    omit_nas = c(TRUE)
+    omit_nas = c(FALSE)
   ) %>% 
   filter(!(log_returns == TRUE & delta_returns == TRUE))
 
@@ -591,6 +548,7 @@ if (fit_parsnip_models == TRUE){
           # sample_n(6) %>%
           mutate(pred = future_pmap(
             list(
+            pred_system = pred_system,
             dep_age = dep_age,
             test_year = test_year,
             model_type = model_type,
@@ -600,17 +558,17 @@ if (fit_parsnip_models == TRUE){
             use_years = use_years,
             log_returns = log_returns,
             delta_returns = delta_returns,
-            omit_nas = omit_nas,
+            omit_nas = FALSE,
             assess = assess,
             factor_years = factor_years
             ),
-            (fit_salmon),
+            (fit_ml_salmon),
             data = data,
             scalar = scalar,
             freshwater_cohort = freshwater_cohort,
             weight = weight_returns,
             trees = trees,
-            n_mtry = 5,
+            initial_prop = 0.8,
             forecast = FALSE,
             .progress = TRUE
           ))
@@ -624,11 +582,26 @@ if (fit_parsnip_models == TRUE){
 
 
 
+# huh <- loo_preds %>% 
+#   filter(model_type == "boost_tree",
+#          dep_age == "2.2") %>% 
+#   mutate(i = 1:nrow(.)) %>% 
+#   mutate(best_params = map(pred, "best_params")) %>% 
+#   select(-pred) %>% 
+#   unnest(cols = best_params) %>% 
+#   group_by(i) %>% 
+#   filter(.estimate == min(.estimate))
+# 
+# hist(huh$learn_rate)
+
+
+
+
 
 # run recurrent neural nets -----------------------------------------------
 
 if (fit_rnn_models == TRUE) {
-  
+  message("starting neural nets")
   rnn_experiments <- purrr::cross_df(
     list(
       engineering = c("scale"),
@@ -891,7 +864,7 @@ olp <- loo_preds
 loo_preds <- loo_preds %>%
   mutate(pred = map(pred,c("salmon_data")))
 
-rids <- rlang::parse_exprs(colnames(looframe)[!colnames(looframe) %in% c("dep_age","test_year")])
+rids <- rlang::parse_exprs(colnames(looframe)[!colnames(looframe) %in% c("dep_age","test_year","pred_system")])
 
 ogloo <- loo_preds
 
@@ -901,14 +874,14 @@ loo_results <- loo_preds %>%
   mutate(id = paste(!!!rids, sep ='-'),
          pred = pmax(0, pred))
 
-run_ids <- rlang::parse_exprs(c("id",colnames(looframe)[!colnames(looframe) %in% c("dep_age","test_year")]))
+run_ids <- rlang::parse_exprs(c("id",colnames(looframe)[!colnames(looframe) %in% c("dep_age","test_year", "pred_system")]))
 
-loo_results %>%
-  ggplot(aes(ret, pred, color = assess)) +
-  geom_point() +
-  geom_abline(aes(slope = 1, intercept = 0)) +
-  facet_grid(log_returns ~ delta_returns,
-             labeller = "label_both")
+# loo_results %>%
+#   ggplot(aes(ret, pred, color = assess)) +
+#   geom_point() +
+#   geom_abline(aes(slope = 1, intercept = 0)) +
+#   facet_grid(log_returns ~ delta_returns,
+#              labeller = "label_both")
 
 age_loo_results <- loo_results %>% 
   group_by(ret_yr, dep_age, !!!run_ids) %>% 
@@ -931,12 +904,6 @@ age_sys_loo_results <- loo_results %>%
             predicted = sum(pred))
 
 
-total_loo_results %>% 
-  ggplot() + 
-  geom_col(dat = data, aes(ret_yr,ret)) + 
-  geom_point(aes(ret_yr, predicted, fill = use_wide_cohorts), shape = 21, size= 2, alpha = 0.85) +
-  theme_minimal() + 
-  scale_x_continuous(limits = c(first_year - 1, NA))
 
 performance_summary <- age_sys_loo_results %>% 
   group_by(!!!run_ids) %>%
@@ -954,6 +921,7 @@ performance_summary %>%
 #   arrange(.estimate)
 
 best_performer <- performance_summary %>% 
+  group_by(model_type) %>% 
   # filter(model_type == "boost_tree") %>%
   filter(.estimate == min(.estimate))
 
@@ -981,10 +949,10 @@ loo_evo_results <- complete_best_loo_preds %>%
 
 
 total_loo_results %>% 
-  filter(id == best_performer$id) %>% 
+  filter(id %in% best_performer$id) %>% 
   ggplot() + 
   geom_col(dat = data, aes(ret_yr,ret / 1000)) + 
-  geom_point(aes(ret_yr, predicted / 1000, color = "forecast"), shape = 21, size= 4,fill = "tomato", alpha = 0.85) +
+  geom_point(aes(ret_yr, predicted / 1000, color = "forecast", fill = model_type), shape = 21, size= 4, alpha = 0.85) +
   theme_minimal() + 
   scale_x_continuous(limits = c(first_year - 1, NA)) + 
   labs(x = "Year", y = "Bristol Bay Sockeye Returns (Million MT)",
@@ -993,7 +961,7 @@ total_loo_results %>%
   scale_color_discrete(name = '')
 
 best_loo_preds <- loo_results %>% 
-  filter(id == best_performer$id) %>% 
+  filter(id %in% best_performer$id) %>% 
   group_by(dep_age) %>% 
   nest() %>% 
   ungroup()
@@ -1001,9 +969,9 @@ best_loo_preds <- loo_results %>%
 looplot <- function(i,x,scalar){
   x %>% 
     ggplot() + 
-    geom_col(aes(ret_yr, ret)) + 
+    geom_col(aes(ret_yr, ret), position = "dodge") + 
     facet_wrap( ~ system, scales = "free_y") + 
-    geom_point(aes(ret_yr, pred), shape = 21, size= 4, fill = "red", alpha = 0.85) + 
+    geom_point(aes(ret_yr, pred, fill = model_type), shape = 21, size= 4, alpha = 0.85) + 
     labs(title = paste0("Age Group: ",i), x = "Year", y = "Returns")
   
 }
@@ -1013,23 +981,14 @@ best_loo_preds <- best_loo_preds %>%
 
 # trelliscopejs::trelliscope(best_loo_preds, panel_col = "loo_plot", name = "loo")
 
-best_loo_summary <- best_loo_preds %>%
-  select(-loo_plot) %>% 
-  unnest(cols = data) %>% 
-  mutate(dep_age = str_replace_all(dep_age, "\\.", "_")) %>%
-  mutate(unq = paste(system, dep_age),
-         pred = pred) %>%
-  rename(year = ret_yr, ml_pred = pred) %>%
-  select(year, unq, ml_pred)
-
 
 best_loo_summary_plot <- best_loo_preds %>%
   select(-loo_plot) %>% 
   unnest(cols = data) %>% 
-  group_by(dep_age, ret_yr, system) %>% 
+  group_by(dep_age, ret_yr, system, model_type) %>% 
   summarise(ret = sum(ret),
             pred = sum(pred)) %>% 
-  ggplot(aes(ret,pred)) + 
+  ggplot(aes(ret,pred, color = model_type)) + 
   geom_point() + 
   geom_abline(intercept = 0, slope = 1) + 
   geom_smooth(method = "lm", color = "red") +
@@ -1039,10 +998,10 @@ best_loo_summary_plot <- best_loo_preds %>%
 best_loo_summary <- best_loo_preds %>%
   select(-loo_plot) %>% 
   unnest(cols = data) %>% 
-  group_by(dep_age, ret_yr, system) %>% 
+  group_by(dep_age, ret_yr, system, model_type) %>% 
   summarise(ret = sum(ret),
             pred = sum(pred)) %>% 
-  group_by(dep_age, system) %>% 
+  group_by(dep_age, system,model_type) %>% 
   summarise(rmse = yardstick::rmse_vec(ret, pred),
             mae = yardstick::mae_vec(ret, pred),
             rsq = yardstick::rsq_vec(ret, pred),
@@ -1073,10 +1032,9 @@ temp <- best_loo_preds %>%
   mutate(brood_year = return_year - age) %>% 
   select(model, brood_year, return_year, system, age_group, observed_returns, predicted_returns)
 
-# temp %>% 
-#   ggplot(aes(observed_returns, predicted_returns)) + 
+# temp %>%
+#   ggplot(aes(observed_returns, predicted_returns, color = "model_type")) +
 #   geom_point()
-
 readr::write_csv(temp, path = file.path(results_dir,"parsnip_loo_results.csv"))
 
 
@@ -1156,7 +1114,9 @@ readr::write_csv(temp, path = file.path(results_dir,"benchmark_loo_results.csv")
 
 predframe <-
   tidyr::expand_grid(dep_age = top_age_groups,
-                     test_year = last_year)
+                     test_year = last_year,
+                     pred_system = unique(top_systems$system),
+                     model_type = unique(best_performer$model_type))
 
 if (run_next_forecast){
 
@@ -1165,18 +1125,19 @@ forecast_fit <- predframe %>%
   mutate(
     pred = future_pmap(
       list(dep_age = dep_age,
-           test_year = test_year),
-      fit_salmon,
-      model_type = best_performer$model_type,
-      use_wide_cohorts = best_performer$use_wide_cohorts,
-      use_spatial_enviro = best_performer$use_spatial_enviro,
-      use_full_cohorts = best_performer$use_full_cohorts,
-      use_years = best_performer$use_years,
-      log_returns = best_performer$log_returns,
-      delta_returns = best_performer$delta_returns,
-      omit_nas = best_performer$omit_nas,
-      assess = best_performer$assess,
-      factor_years = best_performer$factor_years,
+           test_year = test_year,
+           pred_system = pred_system,
+           model_type = model_type),
+      fit_ml_salmon,
+      use_wide_cohorts = best_performer$use_wide_cohorts[1],
+      use_spatial_enviro = best_performer$use_spatial_enviro[1],
+      use_full_cohorts = best_performer$use_full_cohorts[1],
+      use_years = best_performer$use_years[1],
+      log_returns = best_performer$log_returns[1],
+      delta_returns = best_performer$delta_returns[1],
+      omit_nas = best_performer$omit_nas[1],
+      assess = best_performer$assess[1],
+      factor_years = best_performer$factor_years[1],
       data = data,
       scalar = scalar,
       freshwater_cohort = freshwater_cohort,
@@ -1206,21 +1167,21 @@ next_forecast <- forecast_fit %>%
 
 
 next_forecast %>% 
-  group_by(ret_yr) %>% 
+  group_by(ret_yr, model_type) %>% 
   summarise(observed = sum(ret),
             predicted = sum(pred)) %>% 
   ggplot() + 
   geom_point(aes(ret_yr, observed)) + 
-  geom_line(aes(ret_yr, predicted), color = "red")
+  geom_line(aes(ret_yr, predicted, color = model_type))
 
 
 next_forecast %>% 
-  group_by(ret_yr, dep_age) %>% 
+  group_by(ret_yr, dep_age,model_type) %>% 
   summarise(observed = sum(ret),
             predicted = sum(pred)) %>% 
   ggplot() + 
   geom_point(aes(ret_yr, observed)) + 
-  geom_line(aes(ret_yr, predicted), color = "red") + 
+  geom_line(aes(ret_yr, predicted, color = model_type)) + 
   facet_wrap(~dep_age, scales = "free_y")
 
 
@@ -1236,9 +1197,6 @@ next_forecast %>%
 
 
 # process forecast --------------------------------------------------------
-
-
-
 
 
 ml_forecast <- loo_results %>%
@@ -1506,9 +1464,9 @@ raw_forecast_table <- next_forecast %>%
   ungroup() %>% 
   mutate(
     age_group= forcats::fct_relevel(age_group, c("1.2","1.3","2.2","2.3"))) %>% 
-  select(ret_yr, system, age_group, forecast) %>% 
-  bind_rows(ml_forecast %>% select(-model_type)) %>% 
-  group_by(system, ret_yr) %>%
+  select(ret_yr, system, age_group, forecast, model_type) %>% 
+  bind_rows(ml_forecast) %>% 
+  group_by(system, ret_yr, model_type) %>%
   mutate(forecast = forecast * 1000) %>% 
   mutate(Totals = sum(forecast)) %>%
   ungroup() %>% 
@@ -1523,7 +1481,7 @@ total_vars <- colnames(raw_forecast_table)
 total_vars <- total_vars[str_detect(total_vars,"(\\.)|(Totals)")]
 
 forecast_table <- raw_forecast_table %>%
-  group_by(ret_yr) %>%
+  group_by(ret_yr, model_type) %>%
   gt(rowname_col = "system") %>%
   summary_rows(
     groups = TRUE,
@@ -1540,7 +1498,7 @@ forecast_table <- raw_forecast_table %>%
   gt::tab_style(
     style = cell_text(weight = "bold"),
     locations = list(cells_summary(),
-                     cells_data(columns = vars(Totals)))
+                     cells_body(columns = vars(Totals)))
   )
 
 forecast_table
