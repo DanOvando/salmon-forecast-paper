@@ -159,6 +159,245 @@ forecasts %>%
   geom_point(aes(year, forecast)) + 
   facet_wrap(~model)
 
+
+
+# construct statistical ensemble ------------------------------------------
+
+# what should an emsemble look like? Depends a bit on the scale, but for now let's try it at the
+# finest resolution possible
+
+# a = (forecasts %>% filter(year == 1990, system == "Naknek"))
+# 
+# b <- pivot_wider(a, names_from = "model", values_from = "forecast")
+
+
+ensemble_data <- forecasts %>% 
+  mutate(observed = observed / scalar,
+         forecast = forecast / scalar) %>% 
+  group_by(model, system, age_group) %>%
+  arrange(year) %>%
+  mutate(last_observed = lag(observed, 1)) %>%
+  filter(year > first_year) %>% 
+  ungroup() %>% 
+  pivot_wider(names_from = "model", values_from = "forecast") %>% 
+  group_by(system) %>% 
+  mutate(sys_weight = 1 / length(observed))%>% 
+  ungroup()
+# mutate(return_rank = percent_rank(observed)) %>% 
+# mutate(return_type = case_when(return_rank > 0.66 ~ "boom", return_rank < 0.33 ~ "bust", TRUE ~ "meh"))
+
+ensemble_data[is.na(ensemble_data)] <- -999
+
+ensemble_data <- ensemble_data %>% 
+  arrange(year)
+
+if (fit_statistical_ensemble){
+  
+  fit_ensemble <- function(test_year, ensemble_data){
+    
+    training_prop <- last(which(ensemble_data$year < test_year)) / nrow(ensemble_data)
+    
+    ensemble_split <- initial_time_split(ensemble_data, prop = training_prop)
+    
+    training_ensemble_data <- training(ensemble_split)
+    
+    testing_ensemble_data <- testing(ensemble_split)
+    
+    ensemble_splits <- rsample::group_vfold_cv(training_ensemble_data, group = year)
+    
+    tune_grid <- parameters(min_n(range(2,10)), tree_depth(range(4,15)), learn_rate(range = c(-2,0)), mtry(),
+                            loss_reduction(),sample_size(range = c(1,1)), trees(range = c(500,2000)))%>% 
+      dials::finalize(mtry(), x = training_ensemble_data %>% select(-(1:2)))
+    
+    xgboost_grid <- grid_max_entropy(tune_grid, size = 10) 
+    
+    xgboost_model <-
+      parsnip::boost_tree(
+        mode = "regression",
+        mtry = tune(),
+        min_n = tune(),
+        loss_reduction = tune(),
+        sample_size =tune(), 
+        learn_rate = tune(),
+        tree_depth = tune(),
+        trees =tune()
+      ) %>%
+      parsnip::set_engine("xgboost") 
+    
+    # ranger_workflow <- workflows::workflow() %>% 
+    #   add_formula(observed ~ .) %>% 
+    #   add_model(ranger_model)
+    # 
+    xgboost_workflow <- workflows::workflow() %>% 
+      add_formula(observed ~ .) %>% 
+      add_model(xgboost_model)
+    
+    
+    set.seed(234)
+    doParallel::registerDoParallel(cores = parallel::detectCores() - 2)
+    # ranger_tuning <- tune_grid(
+    #   ranger_workflow,
+    #   resamples = ensemble_splits,
+    #   grid = ranger_grid,
+    #   control = control_grid(save_pred = TRUE)
+    # )
+    # ranger_tuning
+    
+    xgboost_tuning <- tune_grid(
+      xgboost_workflow,
+      resamples = ensemble_splits,
+      grid = xgboost_grid,
+      control = control_grid(save_pred = TRUE)
+    )
+    
+    # xgboost_tuning
+    
+    # collect_metrics(ranger_tuning) %>% 
+    #   select(mean, mtry:min_n, .metric) %>% 
+    #   pivot_longer(mtry:min_n, names_to = "dial", values_to = "level") %>% 
+    #   ggplot(aes(level, mean)) + 
+    #   geom_point() + 
+    #   facet_wrap(.metric ~ dial, scales = "free")
+    
+    # collect_metrics(xgboost_tuning) %>% 
+    #   select(mean, mtry:sample_size, .metric) %>% 
+    #   pivot_longer(mtry:sample_size, names_to = "dial", values_to = "level") %>% 
+    #   ggplot(aes(level, mean)) + 
+    #   geom_point() + 
+    #   facet_wrap(.metric ~ dial, scales = "free")
+    # 
+    # show_best(xgboost_tuning, "rmse")
+    # 
+    
+    best_rmse <- tune::select_best(xgboost_tuning, metric = "rmse")
+    
+    # final_ranger_model <- finalize_workflow(
+    #   ranger_workflow,
+    #   best_rmse
+    # )
+    
+    final_workflow <- finalize_workflow(
+      xgboost_workflow,
+      best_rmse
+    )
+    
+    trained_ensemble <-
+      parsnip::boost_tree(
+        mode = "regression",
+        mtry = best_rmse$mtry,
+        min_n = best_rmse$min_n,
+        loss_reduction = best_rmse$loss_reduction,
+        sample_size = best_rmse$sample_size, 
+        learn_rate = best_rmse$learn_rate,
+        tree_depth = best_rmse$tree_depth,
+        trees = best_rmse$trees
+      ) %>%
+      parsnip::set_engine("xgboost") %>%
+      parsnip::fit(observed ~ ., data = training_ensemble_data)
+    
+    # final_ranger_model %>%
+    #   fit(data = training_ensemble_data) %>%
+    #   pull_workflow_fit() %>%
+    #   vip::vip(geom = "point")
+    # 
+    # ensemble_fits <- last_fit(
+    #   final_workflow,
+    #   ensemble_split
+    # )
+    
+    
+    # ranger_ensemble_model <- ranger(observed ~ ., data = training_ensemble_data %>% select(-last_observed),
+    #                                 importance = "impurity_corrected",
+    #                                 mtry = best_rmse$mtry,
+    #                                 min.node.size = best_rmse$min_n,
+    #                                 num.trees = best_rmse$trees,
+    #                                 case.weights = training_ensemble_data$sys_weight)
+    
+    # ranger_ensemble_model <- ranger(observed ~ ., data = training_ensemble_data %>% select(-last_observed),
+    #                                 importance = "impurity_corrected")
+    
+    # vip::vi(ranger_ensemble_model) %>% 
+    #   vip::vip()
+    
+    training_ensemble_data$ensemble_forecast <- predict(trained_ensemble, new_data = training_ensemble_data)$.pred
+    
+    testing_ensemble_data$ensemble_forecast <- predict(trained_ensemble, new_data = testing_ensemble_data)$.pred
+    
+    ensemble_forecasts <- training_ensemble_data %>% 
+      bind_rows(testing_ensemble_data) %>% 
+      mutate(set = ifelse(year >= test_year, "testing", "training"))
+    
+  }
+  
+  ensemble_fits <- tibble(test_year = 2000:last_year) %>% 
+    mutate(ensemble = map(test_year, fit_ensemble, ensemble_data = ensemble_data))
+  
+  write_rds(ensemble_fits, path = file.path(results_dir, "ensemble_fits.rds"))
+  
+  
+} else {
+  
+  ensemble_fits <- read_rds(file.path(results_dir, "ensemble_fits.rds"))
+  
+}
+
+temp <- ensemble_fits %>% 
+  unnest(cols = ensemble)
+
+
+ensemble_forecasts <- temp %>% 
+  filter(year == test_year) %>% 
+  mutate(model = "ensemble")
+
+ensemble_forecasts %>% 
+  ggplot(aes(observed, ensemble_forecast)) + 
+  geom_point() + 
+  geom_abline(aes(slope = 1, intercept = 0)) +
+  facet_wrap(~set)
+
+total_ensemble_plot <- ensemble_forecasts %>% 
+  group_by(year, set) %>% 
+  summarise(observed = sum(observed),
+            ensemble_forecast = sum(ensemble_forecast)) %>% 
+  ungroup() %>% 
+  ggplot(aes(fill = set)) +
+  geom_col(aes(year, observed)) + 
+  geom_point(aes(year, ensemble_forecast), shape = 21)
+
+age_group_ensemble_plot <- ensemble_forecasts %>% 
+  group_by(year, age_group, set) %>% 
+  summarise(observed = sum(observed),
+            ensemble_forecast = sum(ensemble_forecast)) %>% 
+  ungroup() %>% 
+  ggplot(aes(fill = set)) +
+  geom_col(aes(year, observed)) + 
+  geom_point(aes(year, ensemble_forecast), shape = 21) + 
+  facet_wrap(~age_group, scales = "free_y")
+
+
+system_ensemble_plot <- ensemble_forecasts %>% 
+  group_by(year, system, set) %>% 
+  summarise(observed = sum(observed),
+            ensemble_forecast = sum(ensemble_forecast)) %>% 
+  # group_by(system) %>% 
+  # mutate(observed = scale(observed),
+  # ensemble_forecast = scale(ensemble_forecast)) %>% 
+  ungroup() %>% 
+  ggplot(aes(fill = set)) +
+  geom_col(aes(year, observed)) + 
+  geom_point(aes(year, ensemble_forecast),shape = 21) + 
+  facet_wrap(~system, scales = "free_y")
+
+ensemble_forecasts <- ensemble_forecasts %>% 
+  rename(forecast = ensemble_forecast) %>% 
+  select(model, brood_year, year, system, age_group, forecast) %>% 
+  left_join(observed_returns, by = c("system", "year" = "ret_yr", "age_group"))
+  
+
+forecasts <- forecasts %>% 
+  bind_rows(ensemble_forecasts)
+
+
 # create performance summaries
 
 total_forecast <- forecasts %>% 
@@ -672,7 +911,7 @@ total_performance %>%
   arrange(rmse) %>% 
   gt() %>%
   fmt_number(columns = which(colnames(.) != "model"),
-             decimals = 2)
+             decimals = 1)
 
 
 
@@ -700,233 +939,6 @@ system_performance %>%
   fmt_number(columns = which(map_lgl(., is.numeric)),
              decimals = 2)
 
-
-
-# construct statistical ensemble ------------------------------------------
-
-# what should an emsemble look like? Depends a bit on the scale, but for now let's try it at the
-# finest resolution possible
-
-# a = (forecasts %>% filter(year == 1990, system == "Naknek"))
-# 
-# b <- pivot_wider(a, names_from = "model", values_from = "forecast")
-
-
-ensemble_data <- forecasts %>% 
-  mutate(observed = observed / scalar,
-         forecast = forecast / scalar) %>% 
-  group_by(model, system, age_group) %>%
-  arrange(year) %>%
-  mutate(last_observed = lag(observed, 1)) %>%
-  filter(year > first_year) %>% 
-  ungroup() %>% 
-  pivot_wider(names_from = "model", values_from = "forecast") %>% 
-  group_by(system) %>% 
-  mutate(sys_weight = 1 / length(observed))%>% 
-  ungroup()
-  # mutate(return_rank = percent_rank(observed)) %>% 
-  # mutate(return_type = case_when(return_rank > 0.66 ~ "boom", return_rank < 0.33 ~ "bust", TRUE ~ "meh"))
-
-ensemble_data[is.na(ensemble_data)] <- -999
-
-ensemble_data <- ensemble_data %>% 
-  arrange(year)
-
-if (fit_statistical_ensemble){
-
-fit_ensemble <- function(test_year, ensemble_data){
-  
-  training_prop <- last(which(ensemble_data$year < test_year)) / nrow(ensemble_data)
-  
-  ensemble_split <- initial_time_split(ensemble_data, prop = training_prop)
-  
-  training_ensemble_data <- training(ensemble_split)
-  
-  testing_ensemble_data <- testing(ensemble_split)
-  
-  ensemble_splits <- rsample::group_vfold_cv(training_ensemble_data, group = year)
-  
-  tune_grid <- parameters(min_n(range(2,10)), tree_depth(range(4,15)), learn_rate(range = c(-2,0)), mtry(),
-                          loss_reduction(),sample_size(range = c(1,1)), trees(range = c(500,2000)))%>% 
-    dials::finalize(mtry(), x = training_ensemble_data %>% select(-(1:2)))
-  
-  xgboost_grid <- grid_max_entropy(tune_grid, size = 10) 
-  
-  xgboost_model <-
-    parsnip::boost_tree(
-      mode = "regression",
-      mtry = tune(),
-      min_n = tune(),
-      loss_reduction = tune(),
-      sample_size =tune(), 
-      learn_rate = tune(),
-      tree_depth = tune(),
-      trees =tune()
-    ) %>%
-    parsnip::set_engine("xgboost") 
-  
-  # ranger_workflow <- workflows::workflow() %>% 
-  #   add_formula(observed ~ .) %>% 
-  #   add_model(ranger_model)
-  # 
-  xgboost_workflow <- workflows::workflow() %>% 
-    add_formula(observed ~ .) %>% 
-    add_model(xgboost_model)
-  
-  
-  set.seed(234)
-  doParallel::registerDoParallel(cores = parallel::detectCores() - 2)
-  # ranger_tuning <- tune_grid(
-  #   ranger_workflow,
-  #   resamples = ensemble_splits,
-  #   grid = ranger_grid,
-  #   control = control_grid(save_pred = TRUE)
-  # )
-  # ranger_tuning
-  
-  xgboost_tuning <- tune_grid(
-    xgboost_workflow,
-    resamples = ensemble_splits,
-    grid = xgboost_grid,
-    control = control_grid(save_pred = TRUE)
-  )
-  
-  # xgboost_tuning
-  
-  # collect_metrics(ranger_tuning) %>% 
-  #   select(mean, mtry:min_n, .metric) %>% 
-  #   pivot_longer(mtry:min_n, names_to = "dial", values_to = "level") %>% 
-  #   ggplot(aes(level, mean)) + 
-  #   geom_point() + 
-  #   facet_wrap(.metric ~ dial, scales = "free")
-  
-  # collect_metrics(xgboost_tuning) %>% 
-  #   select(mean, mtry:sample_size, .metric) %>% 
-  #   pivot_longer(mtry:sample_size, names_to = "dial", values_to = "level") %>% 
-  #   ggplot(aes(level, mean)) + 
-  #   geom_point() + 
-  #   facet_wrap(.metric ~ dial, scales = "free")
-  # 
-  # show_best(xgboost_tuning, "rmse")
-  # 
-  
-  best_rmse <- tune::select_best(xgboost_tuning, metric = "rmse")
-  
-  # final_ranger_model <- finalize_workflow(
-  #   ranger_workflow,
-  #   best_rmse
-  # )
-  
-  final_workflow <- finalize_workflow(
-    xgboost_workflow,
-    best_rmse
-  )
-  
-  trained_ensemble <-
-    parsnip::boost_tree(
-      mode = "regression",
-      mtry = best_rmse$mtry,
-      min_n = best_rmse$min_n,
-      loss_reduction = best_rmse$loss_reduction,
-      sample_size = best_rmse$sample_size, 
-      learn_rate = best_rmse$learn_rate,
-      tree_depth = best_rmse$tree_depth,
-      trees = best_rmse$trees
-    ) %>%
-    parsnip::set_engine("xgboost") %>%
-    parsnip::fit(observed ~ ., data = training_ensemble_data)
-  
-  # final_ranger_model %>%
-  #   fit(data = training_ensemble_data) %>%
-  #   pull_workflow_fit() %>%
-  #   vip::vip(geom = "point")
-  # 
-  # ensemble_fits <- last_fit(
-  #   final_workflow,
-  #   ensemble_split
-  # )
-  
-  
-  # ranger_ensemble_model <- ranger(observed ~ ., data = training_ensemble_data %>% select(-last_observed),
-  #                                 importance = "impurity_corrected",
-  #                                 mtry = best_rmse$mtry,
-  #                                 min.node.size = best_rmse$min_n,
-  #                                 num.trees = best_rmse$trees,
-  #                                 case.weights = training_ensemble_data$sys_weight)
-  
-  # ranger_ensemble_model <- ranger(observed ~ ., data = training_ensemble_data %>% select(-last_observed),
-  #                                 importance = "impurity_corrected")
-  
-  # vip::vi(ranger_ensemble_model) %>% 
-  #   vip::vip()
-  
-  training_ensemble_data$ensemble_forecast <- predict(trained_ensemble, new_data = training_ensemble_data)$.pred
-  
-  testing_ensemble_data$ensemble_forecast <- predict(trained_ensemble, new_data = testing_ensemble_data)$.pred
-  
-  ensemble_forecasts <- training_ensemble_data %>% 
-    bind_rows(testing_ensemble_data) %>% 
-    mutate(set = ifelse(year >= test_year, "testing", "training"))
-  
-}
-
-ensemble_fits <- tibble(test_year = 2000:last_year) %>% 
-  mutate(ensemble = map(test_year, fit_ensemble, ensemble_data = ensemble_data))
-
-write_rds(ensemble_fits, path = file.path(results_dir, "ensemble_fits.rds"))
-
-
-} else {
-  
-  ensemble_fits <- read_rds(file.path(results_dir, "ensemble_fits.rds"))
-  
-}
-
-temp <- ensemble_fits %>% 
-  unnest(cols = ensemble)
-
-  
-ensemble_forecasts <- temp %>% 
-  filter(year == test_year)
-
-ensemble_forecasts %>% 
-  ggplot(aes(observed, ensemble_forecast)) + 
-  geom_point() + 
-  geom_abline(aes(slope = 1, intercept = 0)) +
-  facet_wrap(~set)
-
-total_ensemble_plot <- ensemble_forecasts %>% 
-  group_by(year, set) %>% 
-  summarise(observed = sum(observed),
-            ensemble_forecast = sum(ensemble_forecast)) %>% 
-  ungroup() %>% 
-  ggplot(aes(fill = set)) +
-  geom_col(aes(year, observed)) + 
-  geom_point(aes(year, ensemble_forecast), shape = 21)
-
-age_group_ensemble_plot <- ensemble_forecasts %>% 
-  group_by(year, age_group, set) %>% 
-  summarise(observed = sum(observed),
-            ensemble_forecast = sum(ensemble_forecast)) %>% 
-  ungroup() %>% 
-  ggplot(aes(fill = set)) +
-  geom_col(aes(year, observed)) + 
-  geom_point(aes(year, ensemble_forecast), shape = 21) + 
-  facet_wrap(~age_group, scales = "free_y")
-
-
-system_ensemble_plot <- ensemble_forecasts %>% 
-  group_by(year, system, set) %>% 
-  summarise(observed = sum(observed),
-            ensemble_forecast = sum(ensemble_forecast)) %>% 
-  # group_by(system) %>% 
-  # mutate(observed = scale(observed),
-         # ensemble_forecast = scale(ensemble_forecast)) %>% 
-  ungroup() %>% 
-  ggplot(aes(fill = set)) +
-  geom_col(aes(year, observed)) + 
-  geom_point(aes(year, ensemble_forecast),shape = 21) + 
-  facet_wrap(~system, scales = "free_y")
 
 
 # figure 1 ----------------------------------------------------------------
