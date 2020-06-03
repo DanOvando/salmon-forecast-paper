@@ -1,5 +1,8 @@
 prep_run <- function(results_name,
-                     results_description =  "test folder for results"
+                     results_description =  "test folder for results",
+                     first_year = 1990,
+                     last_year = 2019,
+                     min_year = 1963
 ) {
   # add any library you need here -------------------------------------------
   
@@ -42,6 +45,12 @@ prep_run <- function(results_name,
   results_name <<- results_name # folder name for batch of results
   
   results_dir <<- here("results", results_name)
+  
+  first_year <<- first_year
+  
+  last_year <<- last_year
+  
+  min_year <<- min_year
   
   if (!dir.exists(results_dir)) {
     

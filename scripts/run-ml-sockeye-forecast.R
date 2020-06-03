@@ -38,6 +38,12 @@ set.seed(42)
 
 # set options -------------------------------------------------------------
 
+# first_year <- 1990 # the first year splitting the test and training data
+
+# last_year <- 2019 # the final year in the data
+
+# min_year <- 1963 # only include data greater than or equal this year
+
 fit_parsnip_models <- TRUE
 
 fit_rnn_models <- TRUE
@@ -57,12 +63,6 @@ cores <- parallel::detectCores() - 2
 trees <- 1000
 
 freshwater_cohort <- TRUE #leave as true
-
-first_year <- 1990 # the first year splitting the test and training data
-
-last_year <- 2019 # the final year in the data
-
-min_year <- 1963 # only include data greater than or equal this year
 
 age_groups <- 4 #number of top age groups to include
 

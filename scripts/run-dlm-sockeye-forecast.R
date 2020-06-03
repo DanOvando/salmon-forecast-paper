@@ -26,7 +26,7 @@ do.est <- TRUE
 do.parallel <- TRUE
 
 # Number of cores to use for parallel
-n.cores <- detectCores()-4
+n.cores <- detectCores()-2
 
 model <- "dlm"
 
@@ -43,7 +43,7 @@ dir.create(dir.out, recursive=TRUE)
 # results_dir <- here::here("results")
 
 # Controls for 1-step ahead prediction
-years <- 1990:2019
+years <- first_year:last_year
 n.years <- length(years)
 
 stocks <- c('Kvichak','Alagnak','Naknek','Egegik','Ugashik','Igushik','Wood','Nushagak','Togiak')
@@ -52,7 +52,7 @@ n.stocks <- length(stocks)
 # Controls for DLM model
 maxit <- 1e4
 model.type <- 0 #NO log transformation
-start.year <- 1963
+start.year <- min__year
 
 # load data ---------------------------------------------------------------
 

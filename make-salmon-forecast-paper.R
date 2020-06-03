@@ -10,17 +10,19 @@ functions <- list.files(here::here("functions"))
 
 purrr::walk(functions, ~ source(here::here("functions", .x)))
 
-prep_run(results_name = "v0.5", results_description = "draft publication with boost tree improvements loo starting in 1990")
-
-first_year <- 1990
-
-last_year <- 2019
+prep_run(results_name = "v0.5", results_description = "draft publication with boost tree improvements loo starting in 1990",
+         first_year = 1990, 
+         last_year = 2019,
+         min_year = 1963)
 
 run_edm_forecast <- FALSE
 
 run_dlm_forecast <- FALSE
 
 run_ml_forecast <- FALSE
+
+fit_statistical_ensemble <- FALSE
+
 
 scalar <- 1000
 
@@ -65,14 +67,17 @@ published_forecasts <-
   get_published_fcst(
     dir.pf = here(file.path("data", "preseasonForecast.dat")),
     dir.ids = here(file.path("data", "ID_Systems.csv")),
-    years = 1990:last_year
+    years = first_year:last_year
   ) %>%
   rename(forecast = FRIfcst) %>%
-  mutate(model = "fri_forecast") %>% 
+  mutate(model = "fri") %>% 
   janitor::clean_names() %>% 
   rename(year = ret_yr) %>% 
-  mutate(age_group = paste(fw_age, o_age, sep = "_")) %>% 
-  as_tibble()
+  mutate(age = fw_age + o_age + 1) %>%
+  unite(age_group, fw_age, o_age, sep = "_") %>% 
+  mutate(brood_year = year - age) %>% 
+  as_tibble() %>% 
+  select(model, brood_year, year, system, age_group, forecast)
 
 
 
@@ -111,6 +116,25 @@ observed_returns <- data %>%
   select(system, age_group, ret_yr, ret) %>% 
   rename(observed = ret)
 
+wtf <- observed_returns %>% 
+  group_by(ret_yr, age_group) %>% 
+  summarise(observed = sum(observed)) %>% 
+  ungroup() %>% 
+  rename(year = ret_yr)
+  
+  
+published_forecasts %>% 
+  group_by(year,age_group) %>% 
+  summarise(forecast = sum(forecast)) %>% 
+  ungroup() %>% 
+  filter(age_group == "1_3") %>% 
+  left_join(wtf) %>% 
+  ggplot(aes(year, forecast)) + 
+  geom_area(aes(year, observed)) +
+  geom_point()
+
+
+
 # adding in observed data from scratch, since there are some rounding errors cropping up in the 
 # observed data in each data frame
 forecasts <- map_df(results, ~read_csv(file.path(results_dir,.x))) %>% 
@@ -118,9 +142,10 @@ forecasts <- map_df(results, ~read_csv(file.path(results_dir,.x))) %>%
          forecast = predicted_returns,
          observed = observed_returns) %>% 
   select(-observed) %>% 
+  bind_rows(published_forecasts) %>% 
   left_join(observed_returns, by = c("system", "year" = "ret_yr", "age_group")) %>% 
   filter(age_group %in% top_age_groups,
-         system != "Alagnak", system != "Togiak") %>% 
+        !system %in% c("Alagnak","Togiak","Branch")) %>% 
   mutate(model = str_remove_all(model, "_forecast")) %>% 
   mutate(model = str_remove_all(model,"_one system top6 ages"))
 
@@ -686,10 +711,6 @@ system_performance %>%
 # 
 # b <- pivot_wider(a, names_from = "model", values_from = "forecast")
 
-a = (forecasts %>% filter(year == 1974, system == "Igushik"))
-
-b <- pivot_wider(a, names_from = "model", values_from = "forecast")
-
 
 ensemble_data <- forecasts %>% 
   mutate(observed = observed / scalar,
@@ -711,114 +732,179 @@ ensemble_data[is.na(ensemble_data)] <- -999
 ensemble_data <- ensemble_data %>% 
   arrange(year)
 
-training_prop <- last(which(ensemble_data$year < 2010)) / nrow(ensemble_data)
+if (fit_statistical_ensemble){
 
-
-ensemble_split <- initial_time_split(ensemble_data, prop = training_prop)
-
-
-training_ensemble_data <- training(ensemble_split)
-
-testing_ensemble_data <- testing(ensemble_split)
-
-ensemble_splits <- rsample::group_vfold_cv(training_ensemble_data, group = year)
-
-tune_grid <- parameters(min_n(), mtry(), trees())  %>%
-  dials::finalize(mtry(), x = training_ensemble_data %>% select(-(1:2)))
-
-ranger_grid <- grid_max_entropy(tune_grid, size = 10) 
-
-ranger_model <-
-  parsnip::rand_forest(
-    mode = "regression",
-    mtry = tune(),
-    min_n = tune(),
-    trees = tune()
-  ) %>%
-  parsnip::set_engine("ranger")
-
-
-ranger_workflow <- workflows::workflow() %>% 
-  add_formula(observed ~ .) %>% 
-  add_model(ranger_model)
-
-set.seed(234)
-doParallel::registerDoParallel(cores = parallel::detectCores() - 2)
-ranger_tuning <- tune_grid(
-  ranger_workflow,
-  resamples = ensemble_splits,
-  grid = ranger_grid,
-  control = control_grid(save_pred = TRUE)
-)
-
-ranger_tuning
-
-collect_metrics(ranger_tuning) %>% 
-  select(mean, mtry:min_n, .metric) %>% 
-  pivot_longer(mtry:min_n, names_to = "dial", values_to = "level") %>% 
-  ggplot(aes(level, mean)) + 
-  geom_point() + 
-  facet_wrap(.metric ~ dial, scales = "free")
-
-show_best(ranger_tuning, "rmse")
-
-best_rmse <- tune::select_best(ranger_tuning, metric = "rmse")
-
-final_ranger_model <- finalize_workflow(
-  ranger_workflow,
-  best_rmse
-)
-
-# final_ranger_model %>%
-#   fit(data = training_ensemble_data) %>%
-#   pull_workflow_fit() %>%
-#   vip::vip(geom = "point")
-# 
-# ensemble_fits <- last_fit(
-#   final_ranger_model,
-#   ensemble_split
-# )
-
-
-# stan_ensemble_model <- stan_glm(observed ~ forecast:model)
-
-ranger_ensemble_model <- ranger(observed ~ ., data = training_ensemble_data %>% select(-last_observed),
-                                importance = "impurity_corrected",
-                                mtry = best_rmse$mtry,
-                                min.node.size = best_rmse$min_n,
-                                num.trees = best_rmse$trees,
-                                case.weights = training_ensemble_data$sys_weight)
-
-# ranger_ensemble_model <- ranger(observed ~ ., data = training_ensemble_data %>% select(-last_observed),
-#                                 importance = "impurity_corrected")
-
-# vip::vi(ranger_ensemble_model) %>% 
-#   vip::vip()
-
-training_ensemble_data$ensemble_forecast <- ranger_ensemble_model$predictions
-
-testing_ensemble_data$ensemble_forecast <- predict(ranger_ensemble_model, data = testing_ensemble_data)$predictions
-
-ensemble_forecasts <- training_ensemble_data %>% 
-  bind_rows(testing_ensemble_data) %>% 
-  mutate(set = ifelse(year >=2010, "testing", "training"))
+fit_ensemble <- function(test_year, ensemble_data){
   
+  training_prop <- last(which(ensemble_data$year < test_year)) / nrow(ensemble_data)
+  
+  ensemble_split <- initial_time_split(ensemble_data, prop = training_prop)
+  
+  training_ensemble_data <- training(ensemble_split)
+  
+  testing_ensemble_data <- testing(ensemble_split)
+  
+  ensemble_splits <- rsample::group_vfold_cv(training_ensemble_data, group = year)
+  
+  tune_grid <- parameters(min_n(range(2,10)), tree_depth(range(4,15)), learn_rate(range = c(-2,0)), mtry(),
+                          loss_reduction(),sample_size(range = c(1,1)), trees(range = c(500,2000)))%>% 
+    dials::finalize(mtry(), x = training_ensemble_data %>% select(-(1:2)))
+  
+  xgboost_grid <- grid_max_entropy(tune_grid, size = 10) 
+  
+  xgboost_model <-
+    parsnip::boost_tree(
+      mode = "regression",
+      mtry = tune(),
+      min_n = tune(),
+      loss_reduction = tune(),
+      sample_size =tune(), 
+      learn_rate = tune(),
+      tree_depth = tune(),
+      trees =tune()
+    ) %>%
+    parsnip::set_engine("xgboost") 
+  
+  # ranger_workflow <- workflows::workflow() %>% 
+  #   add_formula(observed ~ .) %>% 
+  #   add_model(ranger_model)
+  # 
+  xgboost_workflow <- workflows::workflow() %>% 
+    add_formula(observed ~ .) %>% 
+    add_model(xgboost_model)
+  
+  
+  set.seed(234)
+  doParallel::registerDoParallel(cores = parallel::detectCores() - 2)
+  # ranger_tuning <- tune_grid(
+  #   ranger_workflow,
+  #   resamples = ensemble_splits,
+  #   grid = ranger_grid,
+  #   control = control_grid(save_pred = TRUE)
+  # )
+  # ranger_tuning
+  
+  xgboost_tuning <- tune_grid(
+    xgboost_workflow,
+    resamples = ensemble_splits,
+    grid = xgboost_grid,
+    control = control_grid(save_pred = TRUE)
+  )
+  
+  # xgboost_tuning
+  
+  # collect_metrics(ranger_tuning) %>% 
+  #   select(mean, mtry:min_n, .metric) %>% 
+  #   pivot_longer(mtry:min_n, names_to = "dial", values_to = "level") %>% 
+  #   ggplot(aes(level, mean)) + 
+  #   geom_point() + 
+  #   facet_wrap(.metric ~ dial, scales = "free")
+  
+  # collect_metrics(xgboost_tuning) %>% 
+  #   select(mean, mtry:sample_size, .metric) %>% 
+  #   pivot_longer(mtry:sample_size, names_to = "dial", values_to = "level") %>% 
+  #   ggplot(aes(level, mean)) + 
+  #   geom_point() + 
+  #   facet_wrap(.metric ~ dial, scales = "free")
+  # 
+  # show_best(xgboost_tuning, "rmse")
+  # 
+  
+  best_rmse <- tune::select_best(xgboost_tuning, metric = "rmse")
+  
+  # final_ranger_model <- finalize_workflow(
+  #   ranger_workflow,
+  #   best_rmse
+  # )
+  
+  final_workflow <- finalize_workflow(
+    xgboost_workflow,
+    best_rmse
+  )
+  
+  trained_ensemble <-
+    parsnip::boost_tree(
+      mode = "regression",
+      mtry = best_rmse$mtry,
+      min_n = best_rmse$min_n,
+      loss_reduction = best_rmse$loss_reduction,
+      sample_size = best_rmse$sample_size, 
+      learn_rate = best_rmse$learn_rate,
+      tree_depth = best_rmse$tree_depth,
+      trees = best_rmse$trees
+    ) %>%
+    parsnip::set_engine("xgboost") %>%
+    parsnip::fit(observed ~ ., data = training_ensemble_data)
+  
+  # final_ranger_model %>%
+  #   fit(data = training_ensemble_data) %>%
+  #   pull_workflow_fit() %>%
+  #   vip::vip(geom = "point")
+  # 
+  # ensemble_fits <- last_fit(
+  #   final_workflow,
+  #   ensemble_split
+  # )
+  
+  
+  # ranger_ensemble_model <- ranger(observed ~ ., data = training_ensemble_data %>% select(-last_observed),
+  #                                 importance = "impurity_corrected",
+  #                                 mtry = best_rmse$mtry,
+  #                                 min.node.size = best_rmse$min_n,
+  #                                 num.trees = best_rmse$trees,
+  #                                 case.weights = training_ensemble_data$sys_weight)
+  
+  # ranger_ensemble_model <- ranger(observed ~ ., data = training_ensemble_data %>% select(-last_observed),
+  #                                 importance = "impurity_corrected")
+  
+  # vip::vi(ranger_ensemble_model) %>% 
+  #   vip::vip()
+  
+  training_ensemble_data$ensemble_forecast <- predict(trained_ensemble, new_data = training_ensemble_data)$.pred
+  
+  testing_ensemble_data$ensemble_forecast <- predict(trained_ensemble, new_data = testing_ensemble_data)$.pred
+  
+  ensemble_forecasts <- training_ensemble_data %>% 
+    bind_rows(testing_ensemble_data) %>% 
+    mutate(set = ifelse(year >= test_year, "testing", "training"))
+  
+}
+
+ensemble_fits <- tibble(test_year = 2000:last_year) %>% 
+  mutate(ensemble = map(test_year, fit_ensemble, ensemble_data = ensemble_data))
+
+write_rds(ensemble_fits, path = file.path(results_dir, "ensemble_fits.rds"))
+
+
+} else {
+  
+  ensemble_fits <- read_rds(file.path(results_dir, "ensemble_fits.rds"))
+  
+}
+
+temp <- ensemble_fits %>% 
+  unnest(cols = ensemble)
+
+  
+ensemble_forecasts <- temp %>% 
+  filter(year == test_year)
+
 ensemble_forecasts %>% 
   ggplot(aes(observed, ensemble_forecast)) + 
   geom_point() + 
   geom_abline(aes(slope = 1, intercept = 0)) +
   facet_wrap(~set)
 
-ensemble_forecasts %>% 
-  group_by(year) %>% 
+total_ensemble_plot <- ensemble_forecasts %>% 
+  group_by(year, set) %>% 
   summarise(observed = sum(observed),
             ensemble_forecast = sum(ensemble_forecast)) %>% 
   ungroup() %>% 
-  ggplot() +
+  ggplot(aes(fill = set)) +
   geom_col(aes(year, observed)) + 
-  geom_point(aes(year, ensemble_forecast))
+  geom_point(aes(year, ensemble_forecast), shape = 21)
 
-ensemble_forecasts %>% 
+age_group_ensemble_plot <- ensemble_forecasts %>% 
   group_by(year, age_group, set) %>% 
   summarise(observed = sum(observed),
             ensemble_forecast = sum(ensemble_forecast)) %>% 
@@ -826,21 +912,21 @@ ensemble_forecasts %>%
   ggplot(aes(fill = set)) +
   geom_col(aes(year, observed)) + 
   geom_point(aes(year, ensemble_forecast), shape = 21) + 
-  facet_wrap(~age_group)
+  facet_wrap(~age_group, scales = "free_y")
 
 
-ensemble_forecasts %>% 
-  group_by(year, system) %>% 
+system_ensemble_plot <- ensemble_forecasts %>% 
+  group_by(year, system, set) %>% 
   summarise(observed = sum(observed),
             ensemble_forecast = sum(ensemble_forecast)) %>% 
-  group_by(system) %>% 
-  mutate(observed = scale(observed),
-         ensemble_forecast = scale(ensemble_forecast)) %>% 
+  # group_by(system) %>% 
+  # mutate(observed = scale(observed),
+         # ensemble_forecast = scale(ensemble_forecast)) %>% 
   ungroup() %>% 
-  ggplot() +
+  ggplot(aes(fill = set)) +
   geom_col(aes(year, observed)) + 
-  geom_point(aes(year, ensemble_forecast)) + 
-  facet_wrap(~system)
+  geom_point(aes(year, ensemble_forecast),shape = 21) + 
+  facet_wrap(~system, scales = "free_y")
 
 
 # figure 1 ----------------------------------------------------------------
@@ -997,6 +1083,157 @@ age_forecast_figure <- top_age_forecast %>%
 
 
 age_forecast_figure
+
+# figure n ----------------------------------------------------------------
+
+top_models <- total_performance %>% 
+  filter(rmse == min(rmse)) %>% 
+  mutate(combo = paste(model, sep = "_")) %>% 
+  ungroup()
+
+next_best <- total_performance %>% 
+  mutate(model_rank = rank(rmse)) %>% 
+  filter(model_rank < 3) %>% 
+  summarise(model = model[model_rank == 1],
+            percent_improvement = abs(rmse[model_rank == 1] / rmse[model_rank == 2] - 1))
+
+
+top_total_forecast <- total_forecast %>% 
+  mutate(combo = paste(model, sep = "_")) %>% 
+  filter(combo %in% top_models$combo) %>% 
+  left_join(next_best, by = c("model"))
+
+
+total_forecast_figure <- top_total_forecast %>% 
+  ggplot() + 
+  geom_area(aes(year, observed), fill = "darkgray") + 
+  geom_point(aes(year, forecast, fill = model, alpha = percent_improvement), shape = 21, size = 3) +
+  fishualize::scale_fill_fish_d(option = "Trimma_lantana") + 
+  fishualize::scale_color_fish_d(option = "Trimma_lantana") + 
+  scale_alpha_continuous(range = c(0.25,1), labels = percent, name = "% Improvement on 2nd Best Model") + 
+  scale_y_continuous(expand = expansion(c(0,.05)), name = "Returns")
+
+
+total_forecast_figure
+
+
+## -----------------------------------------------------------------------------
+
+
+run_makeup <- data %>% 
+  filter(ret_yr > 2010) %>% 
+  mutate_if(is.factor, as.character) %>% 
+  group_by(age_group, system) %>% 
+  summarise(mean_ret = mean(ret)) %>% 
+  ungroup() %>% 
+  mutate(p_ret = mean_ret / sum(mean_ret))
+
+age_system_performance_figure <-  age_system_performance %>% 
+  group_by(age_group, system) %>% 
+  mutate(ml_improvement = (rmse[model == "lag"] - rmse[model == "boost_tree"]) /  rmse[model == "lag"],
+         ref_rmse =rmse[model == "fri"],
+         sd_rmse = sd(rmse)) %>% 
+  filter(rmse == min(rmse))  %>%
+  ungroup() %>% 
+  left_join(run_makeup) %>% 
+  mutate(scaled_rmse = -(ref_rmse - rmse) / ref_rmse,
+         fface = ifelse(model == "ml", "italic","plain"),
+         model = fct_recode(model,rmean = "runmean")) %>% 
+  ggplot(aes(system, age_group, label = model,color = scaled_rmse)) + 
+  geom_text(aes(fontface = fface, size = sqrt(p_ret))) + 
+  scale_color_gradient(low = "tomato", high = "steelblue", 
+                       labels = scales::percent,
+                       name = "% Change in Error Relative to FRI",
+                       limits = c(-.75,0), 
+                       breaks = seq(-.75,0, by = 0.25),
+                       guide = guide_colorbar(ticks.colour = "black",frame.colour = "black",barwidth = unit(15, units = "lines")))+ 
+  scale_x_discrete(name = '') + 
+  scale_y_discrete(name = '')+
+  scale_size(range = c(4,12), guide = FALSE) +
+  theme(legend.position = "top") + 
+  labs(caption = "Text indicates best performing model from 2000-2019")
+
+age_system_performance_figure
+
+
+# repeat but split in two time periods
+
+performance_break <- 2010
+
+age_system_performance_pre <- age_system_forecast %>% 
+  filter(year < performance_break) %>% 
+  group_by(age_group, system, model) %>% 
+  summarise(rmse = yardstick::rmse_vec(truth = observed, estimate = forecast),
+            r2 = yardstick::rsq_vec(truth = observed, estimate = forecast),
+            # ccc = yardstick::ccc_vec(truth = observed, estimate = forecast),
+            mape = yardstick::mape_vec(truth = observed, estimate = forecast),
+            bias = mean(forecast - observed)) %>% 
+  ungroup() %>% 
+  group_by(age_group, system) %>% 
+  filter(rmse == min(rmse)) %>% 
+  rename(pre_model = model) %>% 
+  ungroup()
+
+
+
+age_system_performance_post <- age_system_forecast %>% 
+  filter(year >= performance_break) %>% 
+  group_by(age_group, system, model) %>% 
+  summarise(rmse = yardstick::rmse_vec(truth = observed, estimate = forecast),
+            r2 = yardstick::rsq_vec(truth = observed, estimate = forecast),
+            # ccc = yardstick::ccc_vec(truth = observed, estimate = forecast),
+            mape = yardstick::mape_vec(truth = observed, estimate = forecast),
+            bias = mean(forecast - observed)) %>% 
+  ungroup() %>% 
+  group_by(age_group, system) %>% 
+  filter(rmse == min(rmse)) %>% 
+  rename(post_model = model) %>% 
+  ungroup()
+
+
+age_system_concordance <- age_system_performance_pre %>% 
+  left_join(age_system_performance_post, by = c("age_group", "system")) %>%
+  select(pre_model, post_model, everything()) %>% 
+  ungroup() %>% 
+  summarise(concordance = mean(pre_model == post_model))
+
+
+age_pre <- age_forecast %>% 
+  filter(year < performance_break) %>% 
+  group_by(age_group, model) %>% 
+  summarise(rmse = yardstick::rmse_vec(truth = observed, estimate = forecast),
+            r2 = yardstick::rsq_vec(truth = observed, estimate = forecast),
+            # ccc = yardstick::ccc_vec(truth = observed, estimate = forecast),
+            mape = yardstick::mape_vec(truth = observed, estimate = forecast),
+            bias = mean(forecast - observed)) %>% 
+  ungroup() %>% 
+  group_by(age_group) %>% 
+  filter(rmse == min(rmse)) %>% 
+  rename(pre_model = model) %>% 
+  ungroup()
+
+age_post <- age_forecast %>% 
+  filter(year >= performance_break) %>% 
+  group_by(age_group, model) %>% 
+  summarise(rmse = yardstick::rmse_vec(truth = observed, estimate = forecast),
+            r2 = yardstick::rsq_vec(truth = observed, estimate = forecast),
+            # ccc = yardstick::ccc_vec(truth = observed, estimate = forecast),
+            mape = yardstick::mape_vec(truth = observed, estimate = forecast),
+            bias = mean(forecast - observed)) %>% 
+  ungroup() %>% 
+  group_by(age_group) %>% 
+  filter(rmse == min(rmse)) %>% 
+  rename(post_model = model) %>% 
+  ungroup()
+
+
+age_concordance <- age_pre %>% 
+  left_join(age_post, by = c("age_group")) %>% 
+  ungroup() %>% 
+  summarise(concordance = mean(pre_model == post_model))
+
+
+
 # save things -------------------------------------------------------------
 
 

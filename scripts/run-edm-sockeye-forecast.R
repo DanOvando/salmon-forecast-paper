@@ -54,7 +54,7 @@ rundir <- results_dir
 
 # last_year <- 2019 # the final year in the data
 age_groups <- 4 #number of top age groups to include
-min_year <- 1963 # only include data greater than or equal this year
+# min_year <- 1963 # only include data greater than or equal this year
 # first_year <- 2000 # the first year splitting the test and training data
 # max_year <- 2015
 
