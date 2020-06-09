@@ -21,7 +21,7 @@ run_dlm_forecast <- FALSE
 
 run_ml_forecast <- FALSE
 
-fit_statistical_ensemble <- FALSE
+fit_statistical_ensemble <- TRUE
 
 
 scalar <- 1000
@@ -177,7 +177,8 @@ ensemble_data <- forecasts %>%
   group_by(model, system, age_group) %>%
   arrange(year) %>%
   mutate(last_observed = lag(observed, 1)) %>%
-  filter(year > first_year) %>% 
+  filter(year > first_year, 
+         model != "fri") %>% 
   ungroup() %>% 
   pivot_wider(names_from = "model", values_from = "forecast") %>% 
   group_by(system) %>% 
@@ -295,16 +296,16 @@ if (fit_statistical_ensemble){
       parsnip::set_engine("xgboost") %>%
       parsnip::fit(observed ~ ., data = training_ensemble_data)
     
-    # final_ranger_model %>%
-    #   fit(data = training_ensemble_data) %>%
-    #   pull_workflow_fit() %>%
-    #   vip::vip(geom = "point")
-    # 
+
+    trained_ensemble %>%
+      vip::vi() %>% 
+      vip::vip(geom = "point")
+
     # ensemble_fits <- last_fit(
     #   final_workflow,
     #   ensemble_split
     # )
-    
+
     
     # ranger_ensemble_model <- ranger(observed ~ ., data = training_ensemble_data %>% select(-last_observed),
     #                                 importance = "impurity_corrected",

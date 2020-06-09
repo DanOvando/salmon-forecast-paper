@@ -42,15 +42,27 @@ prep_run <- function(results_name,
   
   # create directory for result batch and prodide description if desired
   
-  results_name <<- results_name # folder name for batch of results
+  assign("results_name", results_name, envir = .GlobalEnv)
   
-  results_dir <<- here("results", results_name)
+  # results_name <<- results_name # folder name for batch of results
   
-  first_year <<- first_year
+  results_dir <- here("results", results_name)
   
-  last_year <<- last_year
+  assign("results_dir",results_dir , envir = .GlobalEnv)
   
-  min_year <<- min_year
+  # results_dir <<- here("results", results_name)
+  
+  assign("first_year", first_year, envir = .GlobalEnv)
+  
+  # first_year <<- first_year
+  
+  # last_year <<- last_year
+  
+  assign("last_year", last_year, envir = .GlobalEnv)
+  # 
+  # min_year <<- min_year
+  # 
+  assign("min_year", min_year, envir = .GlobalEnv)
   
   if (!dir.exists(results_dir)) {
     
