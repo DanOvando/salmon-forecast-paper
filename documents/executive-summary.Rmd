@@ -1,0 +1,57 @@
+---
+title: "Executive Summary: Improving Bristol Bay Sockeye Salmon Forecasts Through Machine Learning"
+author: "Dan"
+date: "6/12/2020"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, 
+                      fig.width = 9, fig.height = 8, dev = "png")
+
+functions <- list.files(here::here("functions"))
+
+purrr::walk(functions, ~ source(here::here("functions", .x)))
+
+prep_run(results_name = "v0.5", results_description = "draft publication with boost tree improvements loo starting in 1990",
+         first_year = 1990, 
+         last_year = 2019,
+         min_year = 1963, 
+         eval_year = 2000)
+
+load(file = file.path(results_dir, "plots.RData"))
+
+extrafont::loadfonts()
+
+pub_theme <-
+  hrbrthemes::theme_ipsum(base_size = 10, axis_text_size = 12) +
+  theme(
+    panel.spacing = unit(1, "lines"),
+    plot.margin = unit(rep(10, 4), units = "points")
+  )
+
+theme_set(pub_theme)
+
+```
+
+Our goal for this project was to see whether machine learning models could improve the performance of our pre-season forecasts of sockeye salmon in Bristol Bay, Alaska. We were able to use machine learning methods to produce a 7% improvement in the performance of our pre-season forecasts of total sockeye returns. This was mostly driven by the ability of machine learning models to substantially improve our ability to predict returns of 1_2 fish (fish that spend one year in the rivers and two years in the ocean before returning to spawn). For these young fish, our machine learning model produced a 20% improvement in forecast ability from the years 2000 to 2019. This is to our knowledge the first example of machine learning being successfully implemented in the management of system as economically and ecologically vital as the Bristol Bay sockeye salmon fishery. 
+
+
+
+
+```{r, fig.cap = "Total returns (grey shaded area) and total machine learning pre-season forecast (red points) from 2000 to 2019."}
+total_forecast_figure + 
+  scale_fill_discrete(name = '', labels = "Machine Learning Forecast") + 
+  scale_y_continuous(name = "Returns (thousands of fish)", labels = comma) + 
+  scale_x_continuous(name = "Year")
+```
+
+
+```{r, fig.cap = "Observed returns (grey area) and best forecast model (points) for the main age groups of Sockeye Salmon in Bristol Bay. The color of the points shows which model worked best for that age group. 'boost_tree' is a Machine Learning model"}
+age_forecast_figure + 
+  scale_y_continuous(name = "Returns (thousands of fish)", labels = comma,expand = c(0,NA)) + 
+  scale_x_continuous(name = "Year")
+```
+
+
+

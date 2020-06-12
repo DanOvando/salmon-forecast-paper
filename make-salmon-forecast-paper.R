@@ -13,7 +13,8 @@ purrr::walk(functions, ~ source(here::here("functions", .x)))
 prep_run(results_name = "v0.5", results_description = "draft publication with boost tree improvements loo starting in 1990",
          first_year = 1990, 
          last_year = 2019,
-         min_year = 1963)
+         min_year = 1963, 
+         eval_year = 2000)
 
 run_edm_forecast <- FALSE
 
@@ -147,7 +148,8 @@ forecasts <- map_df(results, ~read_csv(file.path(results_dir,.x))) %>%
   filter(age_group %in% top_age_groups,
         !system %in% c("Alagnak","Togiak","Branch")) %>% 
   mutate(model = str_remove_all(model, "_forecast")) %>% 
-  mutate(model = str_remove_all(model,"_one system top6 ages"))
+  mutate(model = str_remove_all(model,"_one system top6 ages")) %>% 
+  filter(year >= eval_year)
 
 forecasts %>% 
   filter(year >= first_year) %>% 
@@ -171,19 +173,47 @@ forecasts %>%
 # b <- pivot_wider(a, names_from = "model", values_from = "forecast")
 
 
-ensemble_data <- forecasts %>% 
+# ensemble_data <- forecasts %>% 
+#   mutate(observed = observed / scalar,
+#          forecast = forecast / scalar) %>% 
+#   group_by(model, system, age_group) %>%
+#   arrange(year) %>%
+#   mutate(last_observed = lag(observed, 1)) %>%
+#   filter(year > first_year, 
+#          model != "fri") %>% 
+#   ungroup() %>% 
+#   pivot_wider(names_from = "model", values_from = "forecast") %>% 
+#   group_by(system) %>% 
+#   mutate(sys_weight = 1 / length(observed))%>% 
+#   ungroup()
+# mutate(return_rank = percent_rank(observed)) %>% 
+# mutate(return_type = case_when(return_rank > 0.66 ~ "boom", return_rank < 0.33 ~ "bust", TRUE ~ "meh"))
+
+# ensemble_data[is.na(ensemble_data)] <- -999
+
+# ensemble_data <- ensemble_data %>% 
+#   arrange(year)
+
+
+ensemble_dep_data <- forecasts %>% 
   mutate(observed = observed / scalar,
          forecast = forecast / scalar) %>% 
-  group_by(model, system, age_group) %>%
-  arrange(year) %>%
-  mutate(last_observed = lag(observed, 1)) %>%
   filter(year > first_year, 
          model != "fri") %>% 
   ungroup() %>% 
-  pivot_wider(names_from = "model", values_from = "forecast") %>% 
-  group_by(system) %>% 
-  mutate(sys_weight = 1 / length(observed))%>% 
-  ungroup()
+  unite("model_agegroup", model, age_group, sep  = '_') %>% 
+  select(system, year, model_agegroup, forecast) %>% 
+  pivot_wider(names_from = "model_agegroup", values_from = "forecast") 
+
+ensemble_data <- forecasts %>%
+  filter(model == "lag") %>% 
+  group_by(year, system) %>% 
+  summarise(observed = sum(observed) / scalar) %>% 
+  ungroup() %>% 
+  left_join(ensemble_dep_data, by = c("year", "system")) %>% 
+  filter(year > first_year)
+
+
 # mutate(return_rank = percent_rank(observed)) %>% 
 # mutate(return_type = case_when(return_rank > 0.66 ~ "boom", return_rank < 0.33 ~ "bust", TRUE ~ "meh"))
 
@@ -191,6 +221,7 @@ ensemble_data[is.na(ensemble_data)] <- -999
 
 ensemble_data <- ensemble_data %>% 
   arrange(year)
+
 
 if (fit_statistical_ensemble){
   
@@ -207,10 +238,10 @@ if (fit_statistical_ensemble){
     ensemble_splits <- rsample::group_vfold_cv(training_ensemble_data, group = year)
     
     tune_grid <- parameters(min_n(range(2,10)), tree_depth(range(4,15)), learn_rate(range = c(-2,0)), mtry(),
-                            loss_reduction(),sample_size(range = c(1,1)), trees(range = c(500,2000)))%>% 
+                            loss_reduction(),sample_prop(range = c(0.5,1)), trees(range = c(500,2000)))%>% 
       dials::finalize(mtry(), x = training_ensemble_data %>% select(-(1:2)))
     
-    xgboost_grid <- grid_max_entropy(tune_grid, size = 10) 
+    xgboost_grid <- grid_max_entropy(tune_grid, size = 20) 
     
     xgboost_model <-
       parsnip::boost_tree(
@@ -243,7 +274,7 @@ if (fit_statistical_ensemble){
     #   control = control_grid(save_pred = TRUE)
     # )
     # ranger_tuning
-    
+
     xgboost_tuning <- tune_grid(
       xgboost_workflow,
       resamples = ensemble_splits,
@@ -260,11 +291,11 @@ if (fit_statistical_ensemble){
     #   geom_point() + 
     #   facet_wrap(.metric ~ dial, scales = "free")
     
-    # collect_metrics(xgboost_tuning) %>% 
-    #   select(mean, mtry:sample_size, .metric) %>% 
-    #   pivot_longer(mtry:sample_size, names_to = "dial", values_to = "level") %>% 
-    #   ggplot(aes(level, mean)) + 
-    #   geom_point() + 
+    # collect_metrics(xgboost_tuning) %>%
+    #   select(mean, mtry:sample_size, .metric) %>%
+    #   pivot_longer(mtry:sample_size, names_to = "dial", values_to = "level") %>%
+    #   ggplot(aes(level, mean)) +
+    #   geom_point() +
     #   facet_wrap(.metric ~ dial, scales = "free")
     # 
     # show_best(xgboost_tuning, "rmse")
@@ -297,9 +328,9 @@ if (fit_statistical_ensemble){
       parsnip::fit(observed ~ ., data = training_ensemble_data)
     
 
-    trained_ensemble %>%
-      vip::vi() %>% 
-      vip::vip(geom = "point")
+    # trained_ensemble %>%
+    #   vip::vi() %>% 
+    #   vip::vip(geom = "point")
 
     # ensemble_fits <- last_fit(
     #   final_workflow,
@@ -328,9 +359,15 @@ if (fit_statistical_ensemble){
       bind_rows(testing_ensemble_data) %>% 
       mutate(set = ifelse(year >= test_year, "testing", "training"))
     
+    # ensemble_forecasts %>% 
+    #   ggplot(aes(observed, ensemble_forecast, color = set)) + 
+    #   geom_point()
+    
+    return(ensemble_forecasts)
+    
   }
   
-  ensemble_fits <- tibble(test_year = 2000:last_year) %>% 
+  ensemble_fits <- tibble(test_year = eval_year:last_year) %>% 
     mutate(ensemble = map(test_year, fit_ensemble, ensemble_data = ensemble_data))
   
   write_rds(ensemble_fits, path = file.path(results_dir, "ensemble_fits.rds"))
@@ -348,7 +385,9 @@ temp <- ensemble_fits %>%
 
 ensemble_forecasts <- temp %>% 
   filter(year == test_year) %>% 
-  mutate(model = "ensemble")
+  mutate(model = "ensemble") %>% 
+  mutate(observed = observed * scalar,
+         ensemble_forecast = ensemble_forecast * scalar) 
 
 ensemble_forecasts %>% 
   ggplot(aes(observed, ensemble_forecast)) + 
@@ -365,16 +404,6 @@ total_ensemble_plot <- ensemble_forecasts %>%
   geom_col(aes(year, observed)) + 
   geom_point(aes(year, ensemble_forecast), shape = 21)
 
-age_group_ensemble_plot <- ensemble_forecasts %>% 
-  group_by(year, age_group, set) %>% 
-  summarise(observed = sum(observed),
-            ensemble_forecast = sum(ensemble_forecast)) %>% 
-  ungroup() %>% 
-  ggplot(aes(fill = set)) +
-  geom_col(aes(year, observed)) + 
-  geom_point(aes(year, ensemble_forecast), shape = 21) + 
-  facet_wrap(~age_group, scales = "free_y")
-
 
 system_ensemble_plot <- ensemble_forecasts %>% 
   group_by(year, system, set) %>% 
@@ -389,14 +418,19 @@ system_ensemble_plot <- ensemble_forecasts %>%
   geom_point(aes(year, ensemble_forecast),shape = 21) + 
   facet_wrap(~system, scales = "free_y")
 
-ensemble_forecasts <- ensemble_forecasts %>% 
+system_ensemble_forecasts <- ensemble_forecasts %>% 
   rename(forecast = ensemble_forecast) %>% 
-  select(model, brood_year, year, system, age_group, forecast) %>% 
-  left_join(observed_returns, by = c("system", "year" = "ret_yr", "age_group"))
+  select(year,system, model,observed, forecast) 
   
 
-forecasts <- forecasts %>% 
-  bind_rows(ensemble_forecasts)
+total_ensemble_forecasts <- ensemble_forecasts %>% 
+  group_by(year, model) %>% 
+  summarise(observed = sum(observed), forecast = sum(ensemble_forecast)) %>% 
+  select(year, model,observed, forecast) %>% 
+  ungroup()
+
+# forecasts <- forecasts %>% 
+#   bind_rows(ensemble_forecasts)
 
 
 # create performance summaries
@@ -405,19 +439,24 @@ total_forecast <- forecasts %>%
   filter(year >= first_year) %>% 
   group_by(year, model) %>% 
   summarise(observed = sum(observed),
-            forecast = sum(forecast))
+            forecast = sum(forecast)) %>% 
+  bind_rows(total_ensemble_forecasts) %>% 
+  ungroup()
 
 age_forecast <- forecasts %>% 
   filter(year >= first_year) %>% 
   group_by(year,age_group,model) %>% 
   summarise(observed = sum(observed),
-            forecast = sum(forecast))
+            forecast = sum(forecast)) %>% 
+  ungroup()
 
 system_forecast <- forecasts %>% 
   filter(year >= first_year) %>% 
   group_by(year,system,model) %>% 
   summarise(observed = sum(observed),
-            forecast = sum(forecast))
+            forecast = sum(forecast)) %>% 
+  ungroup() %>% 
+  bind_rows(system_ensemble_forecasts)
 
 
 age_system_forecast <- forecasts %>% 
@@ -1003,7 +1042,7 @@ age_return_plot <- salmon_data %>%
 
 age_return_plot
 
-figure_1 <-  (total_return_plot / system_return_plot / age_return_plot)
+return_plot <-  (total_return_plot / system_return_plot / age_return_plot)
 
 
 # figure 2 ----------------------------------------------------------------
@@ -1406,6 +1445,8 @@ system_resid_plot <- system_forecast %>% filter(year >= 2000) %>%
 
 
 plots <- ls()[str_detect(ls(), "(_plot)|(_figure)")]
+    
+save(list = plots, file = file.path(results_dir, "plots.RData"))
 
 fig_path <- file.path(results_dir,"figs")
 

@@ -2,7 +2,8 @@ prep_run <- function(results_name,
                      results_description =  "test folder for results",
                      first_year = 1990,
                      last_year = 2019,
-                     min_year = 1963
+                     min_year = 1963,
+                     eval_year = 2000
 ) {
   # add any library you need here -------------------------------------------
   
@@ -63,6 +64,9 @@ prep_run <- function(results_name,
   # min_year <<- min_year
   # 
   assign("min_year", min_year, envir = .GlobalEnv)
+  
+  assign("eval_year", eval_year, envir = .GlobalEnv)
+  
   
   if (!dir.exists(results_dir)) {
     
