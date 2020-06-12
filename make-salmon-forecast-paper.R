@@ -21,7 +21,7 @@ run_dlm_forecast <- FALSE
 
 run_ml_forecast <- FALSE
 
-fit_statistical_ensemble <- TRUE
+fit_statistical_ensemble <- FALSE
 
 
 scalar <- 1000
@@ -1247,6 +1247,160 @@ age_concordance <- age_pre %>%
 
 
 
+
+# assess performance against lags -----------------------------------------
+
+#Calculate mase for 
+#Include lagged values
+forecasts <- forecasts %>%
+  group_by(model, system, age_group) %>%
+  arrange(year) %>% 
+  mutate(lag_observed = lag(observed)) 
+
+#Look at total returns (across age classes) by river
+system_forecast <- system_forecast %>% 
+  group_by(model, system) %>% 
+  arrange(year) %>% 
+  mutate(lag_observed = lag(observed)) 
+
+
+system_mase <-
+  system_forecast %>% filter(year >= 2000) %>% group_by(model, system) %>%
+  summarize(
+    mase_val = my_mase(observed, forecast, lag_observed),
+    rmse_val = yardstick::rmse_vec(observed, forecast)
+  )
+
+system_mase <-
+  system_mase %>% group_by(system) %>% arrange(rmse_val) %>%
+  mutate(rr = row_number())
+
+outs <- tibble(system = unique(system_mase$system))
+
+system_mase <- system_mase %>% 
+  group_by(system) %>% 
+  mutate(rmse_yy = (rmse_val - min(rmse_val)) / min(rmse_val))
+
+
+
+system_mase %>% 
+  ggplot(aes(x = rmse_val, y = mase_val)) + 
+  geom_point() + 
+  geom_hline(yintercept = 1, lty = 2) + 
+  facet_wrap(~ system) +
+  xlab("RMSE") + ylab("MASE")
+
+system_mase$rmse_val <- round(system_mase$rmse_val, digits = 0)
+
+system_mase$rmse_val2 <- system_mase$rmse_val
+
+system_mase[which(system_mase$mase_val >= 1),
+                'rmse_val2'] <- NA 
+
+nsigs <- system_mase %>% group_by(model) %>% 
+  mutate(nsigs = sum(mase_val < 1)) %>% distinct(model, nsigs) %>%
+  arrange(nsigs)
+
+system_mase %>%
+  arrange(model) %>% dcast(model ~ system, value.var = 'rmse_val2') %>%
+  left_join(nsigs, by = 'model') %>% arrange(desc(nsigs)) %>%
+  select(model,nsigs, everything()) %>%
+  write_csv(path = file.path(results_dir,"river_mase_rmse.csv"))
+
+
+system_forecast$resids <-
+  system_forecast$observed - system_forecast$forecast
+
+system_resid_plot <- system_forecast %>% filter(year >= 2000) %>%
+  ggplot() + geom_hline(yintercept = 0) +
+  geom_line(aes(
+    x = year,
+    y = resids,
+    group = model,
+    colour = model
+  ),
+  alpha = .75) + ylab("Residuals") +
+  facet_wrap( ~ system, scales = "free_y") +
+  theme(legend.position = c(.75, .15))
+
+  
+  #Which years were predictable?
+  
+  year_res <- system_forecast %>% filter(year >= 2000) %>% 
+    group_by(model, year) %>% 
+    summarize(mase_val = my_mase(observed,forecast, lag_observed),
+              rmse_val = yardstick::rmse_vec(observed, forecast)) 
+  
+  year_residual_plot <- year_res %>%
+    ggplot(aes(
+      x = year,
+      y = mase_val,
+      colour = model,
+      group = model
+    )) + geom_line() +
+    geom_point() +
+    geom_hline(yintercept = 1) + xlab("Return year") + ylab("MASE") +
+    theme(legend.position = c(.70, .8))
+  
+  #Years where all predictions are wrong
+  year_res %>% filter(mase_val < 1) %>% group_by(year) %>%
+    summarize(nmods = length(model))
+  
+  
+  # repeat but by age classes
+  
+  age_system_mase <- forecasts %>%
+    group_by(model, age_group, system) %>%
+    summarize(
+      mase_val = my_mase(observed, forecast, lag_observed),
+      rmse_val = yardstick::rmse_vec(observed, forecast)
+    )
+  
+  age_system_mase %>% group_by(model, age_group) %>% summarize(nsigs = sum(mase_val < 1)) %>%
+    group_by(model) %>% mutate(sum_nsigs = sum(nsigs)) %>%
+    dcast(model + sum_nsigs ~ age_group, value.var = 'nsigs') %>%
+    arrange(desc(sum_nsigs)) %>% write_csv(path = file.path(results_dir, "model_age_class.csv"))
+  
+
+  forecasts$resid <- forecasts$observed - forecasts$forecast
+  
+  #1_2
+  resids_1_2_plot <- forecasts %>% filter(age_group == "1_2") %>% 
+    ggplot(aes(x = year, y = resid, group = model,
+               colour = model)) + geom_line() + 
+    geom_hline(yintercept = 0, lty = 2) +
+    facet_wrap(~ system, scales = 'free_y')+
+    theme(legend.position = c(.75, .15)) + ggtitle("Age Class 1_2") +
+    xlab("Return Year") + ylab("Residuals")
+    
+  
+  #1_3
+    resids_1_3_plot <- forecasts %>% filter(age_group == "1_3") %>% 
+      ggplot(aes(x = year, y = resid, group = model,
+                 colour = model)) + geom_line() + 
+      geom_hline(yintercept = 0, lty = 2) +
+      facet_wrap(~ system, scales = 'free_y')+
+      theme(legend.position = c(.75, .15)) + ggtitle("Age Class 1_3") +
+      xlab("Return Year") + ylab("Residuals")
+  
+  #2_2
+    resids_2_2_plot <- forecasts %>% filter(age_group == "2_2") %>% 
+      ggplot(aes(x = year, y = resid, group = model,
+                 colour = model)) + geom_line() + 
+      geom_hline(yintercept = 0, lty = 2) +
+      facet_wrap(~ system, scales = 'free_y')+
+      theme(legend.position = c(.75, .15)) + ggtitle("Age Class 2_2") +
+      xlab("Return Year") + ylab("Residuals")
+  
+  #2_3
+    resids_2_3_plot <- forecasts %>% filter(age_group == "2_3") %>% 
+      ggplot(aes(x = year, y = resid, group = model,
+                 colour = model)) + geom_line() + 
+      geom_hline(yintercept = 0, lty = 2) +
+      facet_wrap(~ system, scales = 'free_y')+
+      theme(legend.position = c(.75, .15)) + ggtitle("Age Class 2_3") +
+      xlab("Return Year") + ylab("Residuals")
+  
 # save things -------------------------------------------------------------
 
 
