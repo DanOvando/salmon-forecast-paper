@@ -16,13 +16,13 @@ prep_run(results_name = "v0.5", results_description = "draft publication with bo
          min_year = 1963, 
          eval_year = 2000)
 
-run_edm_forecast <- FALSE
+run_edm_forecast <- TRUE
 
-run_dlm_forecast <- FALSE
+run_dlm_forecast <- TRUE
 
 run_ml_forecast <- FALSE
 
-fit_statistical_ensemble <- TRUE
+fit_statistical_ensemble <- FALSE
 
 
 scalar <- 1000

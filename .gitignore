@@ -9,6 +9,8 @@ results/**/fits/
 *.pdf
 *.docx
 !results/**/*_loo_results.csv
+!results/**/ensemble_fits.rds
+
 data/*.rds
 data/*erddap*
 # Session Data files
