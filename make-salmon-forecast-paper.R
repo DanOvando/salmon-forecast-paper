@@ -10,7 +10,7 @@ functions <- list.files(here::here("functions"))
 
 purrr::walk(functions, ~ source(here::here("functions", .x)))
 
-prep_run(results_name = "v0.5", results_description = "draft publication with boost tree improvements loo starting in 1990",
+prep_run(results_name = "v0.5.1", results_description = "draft publication with boost tree improvements loo starting in 1990",
          first_year = 1990, 
          last_year = 2019,
          min_year = 1963, 
