@@ -23,7 +23,15 @@
 # }
 set.seed(42)
 
+functions <- list.files(here::here("functions"))
 
+purrr::walk(functions, ~ source(here::here("functions", .x)))
+
+prep_run(results_name = "v0.5", results_description = "draft publication with boost tree improvements loo starting in 1990",
+         first_year = 1990,
+         last_year = 2019,
+         min_year = 1963,
+         eval_year = 2000)
 
 
 #aha,
@@ -44,13 +52,13 @@ set.seed(42)
 
 # min_year <- 1963 # only include data greater than or equal this year
 
-fit_parsnip_models <- TRUE
+fit_parsnip_models <- FALSE
 
-fit_rnn_models <- TRUE
+fit_rnn_models <- FALSE
 
 run_query_erddap <-  TRUE
 
-run_next_forecast <- TRUE
+run_next_forecast <- FALSE
 
 by_system <- TRUE
 
@@ -1153,6 +1161,8 @@ forecast_fit <- predframe %>%
 
 write_rds(forecast_fit, path = file.path(results_dir,"next_forecast.rds"))
 
+
+
 } else {
   
   
@@ -1164,6 +1174,9 @@ write_rds(forecast_fit, path = file.path(results_dir,"next_forecast.rds"))
 next_forecast <- forecast_fit %>%
   mutate(pred = map(pred,"salmon_data")) %>%
   unnest(cols = pred) 
+
+write_csv(next_forecast, path = file.path(results_dir,"next_loo_results.csv"))
+
 
 
 next_forecast %>% 
@@ -1200,7 +1213,7 @@ next_forecast %>%
 
 
 ml_forecast <- loo_results %>%
-  filter(id == best_performer$id) %>%
+  # filter(id == best_performer$id) %>%
   select(ret_yr, system, dep_age, pred, model_type) %>%
   rename(forecast = pred,
          age_group = dep_age) 
@@ -1457,7 +1470,9 @@ system_performance %>%
 
 
 
+
 raw_forecast_table <- next_forecast %>% 
+  ungroup() %>% 
   filter(ret_yr == max(ret_yr)) %>% 
   rename(forecast = pred,
          age_group = dep_age) %>% 
@@ -1472,9 +1487,18 @@ raw_forecast_table <- next_forecast %>%
   ungroup() %>% 
   arrange(ret_yr, age_group) %>% 
   pivot_wider(names_from = age_group, values_from = forecast) %>% 
-  select(dplyr::everything(),-Totals, Totals)
+  select(dplyr::everything(),-Totals, Totals) %>% 
+  arrange(desc(ret_yr))
 
-# write_excel_csv(raw_forecast_table %>% mutate_if(is.numeric,round), "raw-machine-learning-forecast-table.csv")
+raw_forecast_table %>% 
+  pivot_longer(contains("."), names_to = "age_group", values_to = "forecast") %>% 
+  group_by(ret_yr, model_type) %>% 
+  summarise(total_forecast = sum(forecast)) %>% 
+  ungroup() %>% 
+  ggplot(aes(ret_yr, total_forecast, color  = model_type)) + 
+  geom_line()
+
+write_csv(raw_forecast_table %>% mutate_if(is.numeric,round), "raw-machine-learning-forecast-table.csv")
 
 total_vars <- colnames(raw_forecast_table)
 
