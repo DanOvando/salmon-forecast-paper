@@ -23,15 +23,15 @@
 # }
 set.seed(42)
 
-functions <- list.files(here::here("functions"))
-
-purrr::walk(functions, ~ source(here::here("functions", .x)))
-
-prep_run(results_name = "v0.5", results_description = "draft publication with boost tree improvements loo starting in 1990",
-         first_year = 1990,
-         last_year = 2019,
-         min_year = 1963,
-         eval_year = 2000)
+# functions <- list.files(here::here("functions"))
+# 
+# purrr::walk(functions, ~ source(here::here("functions", .x)))
+# 
+# prep_run(results_name = "v0.5", results_description = "draft publication with boost tree improvements loo starting in 1990",
+#          first_year = 1990,
+#          last_year = 2019,
+#          min_year = 1963,
+#          eval_year = 2000)
 
 
 #aha,
@@ -52,13 +52,13 @@ prep_run(results_name = "v0.5", results_description = "draft publication with bo
 
 # min_year <- 1963 # only include data greater than or equal this year
 
-fit_parsnip_models <- FALSE
+fit_parsnip_models <- TRUE
 
-fit_rnn_models <- FALSE
+fit_rnn_models <- TRUE
 
 run_query_erddap <-  TRUE
 
-run_next_forecast <- FALSE
+run_next_forecast <- TRUE
 
 by_system <- TRUE
 
