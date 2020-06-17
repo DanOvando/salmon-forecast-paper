@@ -22,7 +22,7 @@ run_dlm_forecast <- FALSE
 
 run_ml_forecast <- FALSE
 
-fit_statistical_ensemble <- FALSE
+fit_statistical_ensemble <- TRUE
 
 
 scalar <- 1000
@@ -148,8 +148,7 @@ forecasts <- map_df(results, ~read_csv(file.path(results_dir,.x))) %>%
   filter(age_group %in% top_age_groups,
         !system %in% c("Alagnak","Togiak","Branch")) %>% 
   mutate(model = str_remove_all(model, "_forecast")) %>% 
-  mutate(model = str_remove_all(model,"_one system top6 ages")) %>% 
-  filter(year >= eval_year)
+  mutate(model = str_remove_all(model,"_one system top6 ages")) 
 
 forecasts %>% 
   filter(year >= first_year) %>% 
@@ -382,6 +381,9 @@ if (fit_statistical_ensemble){
 temp <- ensemble_fits %>% 
   unnest(cols = ensemble)
 
+
+forecasts <- forecasts %>% 
+  filter(year >= eval_year)
 
 ensemble_forecasts <- temp %>% 
   filter(year == test_year) %>% 

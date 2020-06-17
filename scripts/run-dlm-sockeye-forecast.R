@@ -52,7 +52,7 @@ n.stocks <- length(stocks)
 # Controls for DLM model
 maxit <- 1e4
 model.type <- 0 #NO log transformation
-start.year <- min__year
+start.year <- min_year
 
 # load data ---------------------------------------------------------------
 
