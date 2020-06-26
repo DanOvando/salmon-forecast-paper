@@ -522,7 +522,7 @@ total_performance <- total_forecast %>%
             mase = yardstick::mase_vec(truth = observed, estimate = forecast),
             bias = mean(forecast - observed)) %>% 
   ungroup() %>% 
-  arrange(rmse)
+  arrange(mase)
 
 recent <- total_forecast %>% 
   filter(year >= 2014) %>% 
@@ -535,8 +535,7 @@ recent <- total_forecast %>%
             mase = yardstick::mase_vec(truth = observed, estimate = forecast),
             bias = mean(forecast - observed)) %>% 
   ungroup() %>% 
-  arrange(rmse)
-
+  arrange(mase)
 
 system_performance <- system_forecast %>% 
   group_by(model, system) %>% 
@@ -546,7 +545,7 @@ system_performance <- system_forecast %>%
             mase = yardstick::mase_vec(truth = observed, estimate = forecast),
             bias = mean(forecast - observed)) %>% 
   ungroup() %>% 
-  arrange(rmse)
+  arrange(mase)
 
 age_performance <- age_forecast %>% 
   group_by(model, age_group) %>% 
@@ -558,18 +557,18 @@ age_performance <- age_forecast %>%
             mase = yardstick::mase_vec(truth = observed, estimate = forecast),
             bias = mean(forecast - observed)) %>% 
   ungroup() %>% 
-  arrange(rmse)
+  arrange(mase)
 
 
 total_performance_plot <- total_performance %>% 
-  ggplot(aes(reorder(model, mape), rmse)) + 
+  ggplot(aes(reorder(model, mase), mase)) + 
   geom_col()
 
 total_performance_plot
 
 age_performance_plot <- age_performance %>% 
   group_by(age_group) %>% 
-  ggplot(aes(reorder(model, r2), r2)) + 
+  ggplot(aes(reorder(model, mase), mase)) + 
   geom_col() + 
   facet_wrap(~age_group) + 
   scale_x_discrete(guide = guide_axis(n.dodge = 2))
@@ -579,7 +578,7 @@ age_performance_plot
 
 system_performance_plot <- system_performance %>% 
   group_by(system) %>% 
-  ggplot(aes(reorder(model, r2), r2)) + 
+  ggplot(aes(reorder(model, mase), mase)) + 
   geom_col() + 
   facet_wrap(~system) + 
   scale_x_discrete(guide = guide_axis(n.dodge = 2)) + 
@@ -708,188 +707,12 @@ all_age_pred_plot <- age_forecast %>%
 all_age_pred_plot
 
 
-
-# age system pred plot ----------------------------------------------------
-
-age_sys_pred_plot <- age_system_forecast %>%
-  filter(model != "runmean") %>%
-  ggplot() +
-  geom_col(aes(year, observed), position = "dodge",alpha = 0.75) +
-  geom_line(aes(year, forecast, color = model), linetype = 1, size = 1) +
-  # geom_point(aes(year, forecast, fill = model), size = 4,shape = 21) +
-  scale_y_continuous(name = "Returns (millions)") +
-  scale_x_continuous(name = '')  +
-  facet_grid(system~age_group, scales = "free_y") +
-  scale_fill_ucscgb() +
-  scale_color_ucscgb() +
-  theme(axis.text = element_text(angle = 45, vjust = 0, hjust = 1, size = 10))
-
-
-age_sys_pred_plot
-
-
-
-## -----------------------------------------------------------------------------
-
-
-run_makeup <- data %>% 
-  filter(ret_yr > 2010) %>% 
-  mutate_if(is.factor, as.character) %>% 
-  group_by(age_group, system) %>% 
-  summarise(mean_ret = mean(ret)) %>% 
-  ungroup() %>% 
-  mutate(p_ret = mean_ret / sum(mean_ret))
-
-age_system_performance_plot <-  age_system_performance %>% 
-  group_by(age_group, system) %>% 
-  mutate(ml_improvement = (rmse[model == "lag"] - rmse[model == "boost_tree"]) /  rmse[model == "lag"],
-         ref_rmse =rmse[model == "lag"],
-         sd_rmse = sd(rmse)) %>% 
-  filter(rmse == min(rmse))  %>%
-  ungroup() %>% 
-  left_join(run_makeup) %>% 
-  mutate(scaled_rmse = -(ref_rmse - rmse) / ref_rmse,
-         fface = ifelse(model == "ml", "italic","plain"),
-         model = fct_recode(model,rmean = "runmean")) %>% 
-  ggplot(aes(system, age_group, label = model,color = scaled_rmse)) + 
-  geom_text(aes(fontface = fface, size = sqrt(p_ret))) + 
-  scale_color_gradient(low = "tomato", high = "steelblue", 
-                       labels = scales::percent,
-                       name = "% Change in Error Relative to rmean",
-                       limits = c(-.75,0), 
-                       breaks = seq(-.75,0, by = 0.25),
-                       guide = guide_colorbar(ticks.colour = "black",frame.colour = "black",barwidth = unit(15, units = "lines")))+ 
-  scale_x_discrete(name = '') + 
-  scale_y_discrete(name = '')+
-  scale_size(range = c(4,12), guide = FALSE) +
-  theme(legend.position = "top") + 
-  labs(caption = "Text indicates best performing model from 2000-2019")
-
-age_system_performance_plot
-
-
-# repeat but split in two time periods
-
-performance_break <- 2010
-
-age_system_performance_pre <- age_system_forecast %>% 
-  filter(year < performance_break) %>% 
-  group_by(age_group, system, model) %>% 
-  summarise(rmse = yardstick::rmse_vec(truth = observed, estimate = forecast),
-            r2 = yardstick::rsq_vec(truth = observed, estimate = forecast),
-            # ccc = yardstick::ccc_vec(truth = observed, estimate = forecast),
-            mape = yardstick::mape_vec(truth = observed, estimate = forecast),
-            bias = mean(forecast - observed)) %>% 
-  ungroup() %>% 
-  group_by(age_group, system) %>% 
-  filter(rmse == min(rmse)) %>% 
-  rename(pre_model = model) %>% 
-  ungroup()
-
-
-
-age_system_performance_post <- age_system_forecast %>% 
-  filter(year >= performance_break) %>% 
-  group_by(age_group, system, model) %>% 
-  summarise(rmse = yardstick::rmse_vec(truth = observed, estimate = forecast),
-            r2 = yardstick::rsq_vec(truth = observed, estimate = forecast),
-            # ccc = yardstick::ccc_vec(truth = observed, estimate = forecast),
-            mape = yardstick::mape_vec(truth = observed, estimate = forecast),
-            bias = mean(forecast - observed)) %>% 
-  ungroup() %>% 
-  group_by(age_group, system) %>% 
-  filter(rmse == min(rmse)) %>% 
-  rename(post_model = model) %>% 
-  ungroup()
-  
-
-age_system_concordance <- age_system_performance_pre %>% 
-  left_join(age_system_performance_post, by = c("age_group", "system")) %>%
-  select(pre_model, post_model, everything()) %>% 
-  ungroup() %>% 
-  summarise(concordance = mean(pre_model == post_model))
-
-
-age_pre <- age_forecast %>% 
-  filter(year < performance_break) %>% 
-  group_by(age_group, model) %>% 
-  summarise(rmse = yardstick::rmse_vec(truth = observed, estimate = forecast),
-            r2 = yardstick::rsq_vec(truth = observed, estimate = forecast),
-            # ccc = yardstick::ccc_vec(truth = observed, estimate = forecast),
-            mape = yardstick::mape_vec(truth = observed, estimate = forecast),
-            bias = mean(forecast - observed)) %>% 
-  ungroup() %>% 
-  group_by(age_group) %>% 
-  filter(rmse == min(rmse)) %>% 
-  rename(pre_model = model) %>% 
-  ungroup()
-
-age_post <- age_forecast %>% 
-  filter(year >= performance_break) %>% 
-  group_by(age_group, model) %>% 
-  summarise(rmse = yardstick::rmse_vec(truth = observed, estimate = forecast),
-            r2 = yardstick::rsq_vec(truth = observed, estimate = forecast),
-            # ccc = yardstick::ccc_vec(truth = observed, estimate = forecast),
-            mape = yardstick::mape_vec(truth = observed, estimate = forecast),
-            bias = mean(forecast - observed)) %>% 
-  ungroup() %>% 
-  group_by(age_group) %>% 
-  filter(rmse == min(rmse)) %>% 
-  rename(post_model = model) %>% 
-  ungroup()
-
-
-age_concordance <- age_pre %>% 
-  left_join(age_post, by = c("age_group")) %>% 
-  ungroup() %>% 
-  summarise(concordance = mean(pre_model == post_model))
-
-
-# system
-
-system_pre <- system_forecast %>% 
-  filter(year < performance_break) %>% 
-  group_by(system, model) %>% 
-  summarise(rmse = yardstick::rmse_vec(truth = observed, estimate = forecast),
-            r2 = yardstick::rsq_vec(truth = observed, estimate = forecast),
-            # ccc = yardstick::ccc_vec(truth = observed, estimate = forecast),
-            mape = yardstick::mape_vec(truth = observed, estimate = forecast),
-            bias = mean(forecast - observed)) %>% 
-  ungroup() %>% 
-  group_by(system) %>% 
-  filter(rmse == min(rmse)) %>% 
-  rename(pre_model = model) %>% 
-  ungroup()
-
-system_post <- system_forecast %>% 
-  filter(year >= performance_break) %>% 
-  group_by(system, model) %>% 
-  summarise(rmse = yardstick::rmse_vec(truth = observed, estimate = forecast),
-            r2 = yardstick::rsq_vec(truth = observed, estimate = forecast),
-            # ccc = yardstick::ccc_vec(truth = observed, estimate = forecast),
-            mape = yardstick::mape_vec(truth = observed, estimate = forecast),
-            bias = mean(forecast - observed)) %>% 
-  ungroup() %>% 
-  group_by(system) %>% 
-  filter(rmse == min(rmse)) %>% 
-  rename(post_model = model) %>% 
-  ungroup()
-
-
-system_concordance <- system_pre %>% 
-  left_join(system_post, by = c("system")) %>% 
-  ungroup() %>% 
-  summarise(concordance = mean(pre_model == post_model))
-
-
-
-
 ## -----------------------------------------------------------------------------
 
 naive_ensemble <- age_system_performance %>%
   filter(model != "fri") %>% 
   group_by(age_group, system) %>%
-  filter(rmse == min(rmse, na.rm = TRUE)) %>%
+  filter(mase == min(mase, na.rm = TRUE)) %>%
   select(age_group, system, model) %>%
   rename(best_model = model)
 
@@ -950,7 +773,7 @@ system_naive_ensemble_forecasts_plot
 
 
 total_performance %>%
-  arrange(rmse) %>% 
+  arrange(mase) %>% 
   gt() %>%
   fmt_number(columns = which(colnames(.) != "model"),
              decimals = 1)
@@ -963,7 +786,7 @@ total_performance %>%
 age_performance %>%
   # filter(model %in% c("fri","ml")) %>% 
   group_by(age_group) %>% 
-  arrange(rmse) %>% 
+  arrange(mase) %>% 
   gt() %>%
   fmt_number(columns = which(map_lgl(., is.numeric)),
              decimals = 2)
@@ -976,7 +799,7 @@ age_performance %>%
 system_performance %>%
   # filter(model %in% c("fri","ml")) %>% 
   group_by(system) %>% 
-  arrange(rmse) %>% 
+  arrange(mase) %>% 
   gt() %>%
   fmt_number(columns = which(map_lgl(., is.numeric)),
              decimals = 2)
@@ -1060,16 +883,16 @@ pal <- pnw_palette("Winter",n = n_distinct(system_performance$model))
 top_models <- system_performance %>% 
   group_by(system) %>% 
   # filter(model == "dlm") %>%
-  filter(rmse == min(rmse)) %>% 
+  filter(mase == min(mase)) %>% 
   mutate(combo = paste(system, model, sep = "_"))
 
 next_best <- system_performance %>% 
   group_by(system) %>% 
-  mutate(model_rank = rank(rmse)) %>% 
+  mutate(model_rank = rank(mase)) %>% 
   filter(model_rank < 3) %>% 
   arrange(system)  %>% 
   summarise(model = model[model_rank == 1],
-            percent_improvement = abs(rmse[model_rank == 1] / rmse[model_rank == 2] - 1))
+            percent_improvement = abs(mase[model_rank == 1] / mase[model_rank == 2] - 1))
 
 
 top_system_forecast <- system_forecast %>% 
@@ -1095,7 +918,7 @@ system_forecast_figure
 
 top_models <- age_performance %>% 
   group_by(age_group) %>% 
-  filter(rmse == min(rmse)) %>% 
+  filter(mase == min(mase)) %>% 
   mutate(combo = paste(age_group, model, sep = "_")) %>% 
   ungroup()
 
@@ -1112,11 +935,11 @@ age_forecast_figure <- top_age_forecast %>%
 
 next_best <- age_performance %>% 
   group_by(age_group) %>% 
-  mutate(model_rank = rank(rmse)) %>% 
+  mutate(model_rank = rank(mase)) %>% 
   filter(model_rank < 3) %>% 
   arrange(age_group)  %>% 
   summarise(model = model[model_rank == 1],
-            percent_improvement = abs(rmse[model_rank == 1] / rmse[model_rank == 2] - 1))
+            percent_improvement = abs(mase[model_rank == 1] / mase[model_rank == 2] - 1))
 
 
 top_age_forecast <- age_forecast %>% 
@@ -1141,15 +964,15 @@ age_forecast_figure
 # figure n ----------------------------------------------------------------
 
 top_models <- total_performance %>% 
-  filter(rmse == min(rmse)) %>% 
+  filter(mase == min(mase)) %>% 
   mutate(combo = paste(model, sep = "_")) %>% 
   ungroup()
 
 next_best <- total_performance %>% 
-  mutate(model_rank = rank(rmse)) %>% 
+  mutate(model_rank = rank(mase)) %>% 
   filter(model_rank < 3) %>% 
   summarise(model = model[model_rank == 1],
-            percent_improvement = abs(rmse[model_rank == 1] / rmse[model_rank == 2] - 1))
+            percent_improvement = abs(mase[model_rank == 1] / mase[model_rank == 2] - 1))
 
 
 top_total_forecast <- total_forecast %>% 
