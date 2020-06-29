@@ -16,6 +16,8 @@ prep_run(results_name = "v0.5.1", results_description = "draft publication with 
          min_year = 1963, 
          eval_year = 2000)
 
+options(dplyr.summarise.inform = FALSE)
+
 run_edm_forecast <- FALSE
 
 run_dlm_forecast <- FALSE
@@ -148,7 +150,9 @@ forecasts <- map_df(results, ~read_csv(file.path(results_dir,.x))) %>%
   filter(age_group %in% top_age_groups,
         !system %in% c("Alagnak","Togiak","Branch")) %>% 
   mutate(model = str_remove_all(model, "_forecast")) %>% 
-  mutate(model = str_remove_all(model,"_one system top6 ages")) 
+  mutate(model = str_remove_all(model,"_one system top6 ages"))  %>% 
+  mutate(observed = observed / 1000, 
+         forecast = forecast / 1000)
 
 forecasts %>% 
   filter(year >= first_year) %>% 
@@ -646,7 +650,7 @@ age_sys_return_plot <- salmon_data %>%
   geom_col(alpha = 0.75) + 
   facet_wrap(~system, scales = "free_y") + 
   scale_fill_viridis_d(name = "Age Group") + 
-  scale_y_continuous(name = "Returns (millions)") + 
+  scale_y_continuous(name = "Returns (Millions of Salmon)") + 
   scale_x_continuous(name = '') +
   theme(legend.position = "top") 
 
@@ -820,9 +824,7 @@ bristol_bay_plot <- ggplot() +
   geom_sf(data = alaska) + 
   coord_sf(xlim = alaska_bbox[c("xmin", "xmax")],
            ylim = alaska_bbox[c("ymin", "ymax")]) +
-  ggthemes::theme_map() + 
-  labs(caption = "Placeholder for a map if needed; add in river systems?")
-
+  ggthemes::theme_map() 
 
 total_return_plot <- salmon_data %>% 
   group_by(year) %>% 
@@ -831,8 +833,9 @@ total_return_plot <- salmon_data %>%
   geom_area(alpha = 1) + 
   scale_y_continuous(name = "Returns (millions)", expand = expansion()) + 
   scale_x_continuous(name = '') + 
-  theme(axis.text.x = element_blank()) + 
-  labs(title = "A")
+  theme(axis.text.x = element_blank(),
+        plot.margin = unit(c(0,0,0,0), units = "lines")) + 
+  labs(subtitle = "A")
 
 total_return_plot
 
@@ -847,8 +850,9 @@ system_return_plot <- salmon_data %>%
   scale_y_continuous(name = "", expand = expansion()) + 
   scale_x_continuous(name = '') +
   scale_fill_viridis_d(name = 'System') + 
-  theme(axis.text.x = element_blank()) + 
-  labs(title = "B")
+  theme(axis.text.x = element_blank(),
+        plot.margin = unit(c(0,0,0,0), units = "lines")) + 
+  labs(subtitle = "B")
 
 
 system_return_plot
@@ -862,12 +866,48 @@ age_return_plot <- salmon_data %>%
   scale_y_continuous(name = "", expand = expansion()) + 
   scale_x_continuous(name = 'Year') +
   scale_fill_viridis_d(option = "plasma", name = 'Age Group') + 
-  labs(title = "C")
+  labs(subtitle = "C") +
+  theme(plot.margin = unit(c(0,0,0,0), units = "lines"))
 
 
 age_return_plot
 
-return_plot <-  (total_return_plot / system_return_plot / age_return_plot)
+# 
+# dd <- data.frame(x=LETTERS[1:3], y=1:3)
+# pie <- ggplot(dd, aes(x=1, y, fill=x)) + geom_bar(stat="identity", width=1) + coord_polar(theta="y") +
+#   theme_void() + theme(legend.position="none") + theme_transparent()
+
+# df <- tibble(x = sample(2:9),
+#              y = sample(2:9),
+#              width = sample(seq(0.5, 3, length.out=length(x))),
+#              pie = list(pie))
+# 
+# 
+# p <- ggplot(data=data.frame(x=c(0, 10), y=c(0, 10)), aes(x, y))+geom_blank()
+# p + geom_subview(aes(x=x, y=y, subview=pie, width=width, height=width), data=df)
+
+
+# df <- tibble(x = 180,
+#              y = 55,
+#              width = sample(seq(0.5, 3, length.out=length(x))),
+#              pie = list(pie))
+# 
+# bristol_bay_plot + geom_subview(aes(x=x, y=y, subview=pie, width=width, height=width), data=df)
+
+return_plot <-   (total_return_plot / system_return_plot / age_return_plot)
+return_plot
+
+
+
+# plot_area <- (alaska_bbox['xmax'] - alaska_bbox['xmin']) *  (alaska_bbox['ymax'] - alaska_bbox['ymin'])
+# 
+# df <- tibble(x = alaska_bbox["xmin"] * 0.9,
+#              y = alaska_bbox["ymin"] * 3,
+#              width = 2e6,
+#              height = 2e6,
+#              pie = list(return_plot))
+# 
+# bristol_bay_plot + theme_classic() + geom_subview(aes(x=x, y=y, subview=pie, width=width, height=height), data=df)
 
 
 # figure 2 ----------------------------------------------------------------
@@ -877,6 +917,11 @@ return_plot <-  (total_return_plot / system_return_plot / age_return_plot)
 
 
 # figure 3 ----------------------------------------------------------------
+
+
+# forecasts %>% 
+#   group_by(year, model) %>% 
+#   summarise(r = sum(observed)) %>% View()
 
 pal <- pnw_palette("Winter",n = n_distinct(system_performance$model))
 
@@ -892,7 +937,8 @@ next_best <- system_performance %>%
   filter(model_rank < 3) %>% 
   arrange(system)  %>% 
   summarise(model = model[model_rank == 1],
-            percent_improvement = abs(mase[model_rank == 1] / mase[model_rank == 2] - 1))
+            percent_improvement = abs(mase[model_rank == 1] / mase[model_rank == 2] - 1),
+            mase = mase[model_rank == 1])
 
 
 top_system_forecast <- system_forecast %>% 
@@ -904,12 +950,13 @@ top_system_forecast <- system_forecast %>%
 system_forecast_figure <- top_system_forecast %>% 
   ggplot() + 
   geom_area(aes(year, observed), fill = "darkgray") + 
-  geom_point(aes(year, forecast, fill = model, alpha = percent_improvement), shape = 21, size = 3) +
+  geom_point(aes(year, forecast, fill = model, alpha = mase), shape = 21, size = 3) +
   facet_wrap(~system, scales = "free_y") + 
   fishualize::scale_fill_fish_d(option = "Trimma_lantana") + 
   fishualize::scale_color_fish_d(option = "Trimma_lantana") + 
-  scale_alpha_continuous(range = c(0.25,1), labels = percent, name = "% Improvement on 2nd Best Model") + 
-  scale_y_continuous(expand = expansion(c(0,.05)), name = "Returns")
+  scale_alpha_continuous(range = c(1,0.25), name = "MASE") +
+  scale_x_continuous(name = '') + 
+  scale_y_continuous(expand = expansion(c(0,.05)), name = "Returns (Millions of Salmon)")
 
 system_forecast_figure
 
@@ -939,7 +986,8 @@ next_best <- age_performance %>%
   filter(model_rank < 3) %>% 
   arrange(age_group)  %>% 
   summarise(model = model[model_rank == 1],
-            percent_improvement = abs(mase[model_rank == 1] / mase[model_rank == 2] - 1))
+            percent_improvement = abs(mase[model_rank == 1] / mase[model_rank == 2] - 1),
+            mase = mase[model_rank == 1])
 
 
 top_age_forecast <- age_forecast %>% 
@@ -951,12 +999,14 @@ top_age_forecast <- age_forecast %>%
 age_forecast_figure <- top_age_forecast %>% 
   ggplot() + 
   geom_area(aes(year, observed), fill = "darkgray") + 
-  geom_point(aes(year, forecast, fill = model, alpha = percent_improvement), shape = 21, size = 3) +
+  geom_point(aes(year, forecast, fill = model, alpha = mase), shape = 21, size = 3) +
   facet_wrap(~age_group, scales = "free_y") + 
   fishualize::scale_fill_fish_d(option = "Trimma_lantana") + 
   fishualize::scale_color_fish_d(option = "Trimma_lantana") + 
-  scale_alpha_continuous(range = c(0.25,1), labels = percent, name = "% Improvement on 2nd Best Model") + 
-  scale_y_continuous(expand = expansion(c(0,.05)), name = "Returns")
+  scale_alpha_continuous(range = c(1,0.25), labels = percent, name = "MASE") + 
+  scale_y_continuous(expand = expansion(c(0,.05)), name = "Returns (Millions of Salmon)") + 
+  scale_x_continuous(name = '')
+  
 
 
 age_forecast_figure
@@ -972,7 +1022,8 @@ next_best <- total_performance %>%
   mutate(model_rank = rank(mase)) %>% 
   filter(model_rank < 3) %>% 
   summarise(model = model[model_rank == 1],
-            percent_improvement = abs(mase[model_rank == 1] / mase[model_rank == 2] - 1))
+            percent_improvement = abs(mase[model_rank == 1] / mase[model_rank == 2] - 1),
+            mase = mase[model_rank == 1])
 
 
 top_total_forecast <- total_forecast %>% 
@@ -984,11 +1035,12 @@ top_total_forecast <- total_forecast %>%
 total_forecast_figure <- top_total_forecast %>% 
   ggplot() + 
   geom_area(aes(year, observed), fill = "darkgray") + 
-  geom_point(aes(year, forecast, fill = model, alpha = percent_improvement), shape = 21, size = 3) +
+  geom_point(aes(year, forecast, fill = model, alpha = mase), shape = 21, size = 3) +
   fishualize::scale_fill_fish_d(option = "Trimma_lantana") + 
   fishualize::scale_color_fish_d(option = "Trimma_lantana") + 
-  scale_alpha_continuous(range = c(0.25,1), labels = percent, name = "% Improvement on 2nd Best Model") + 
-  scale_y_continuous(expand = expansion(c(0,.05)), name = "Returns")
+  scale_alpha_continuous(range = c(1,0.25), name = "MASE") + 
+  scale_y_continuous(expand = expansion(c(0,.05)), name = "Returns (Millions of Salmon)") + 
+  scale_x_continuous(name = '') 
 
 
 total_forecast_figure
@@ -1127,6 +1179,17 @@ system_forecast <- system_forecast %>%
   arrange(year) %>% 
   mutate(lag_observed = lag(observed)) 
 
+total_forecast <- total_forecast %>% 
+  group_by(model) %>% 
+  arrange(year) %>% 
+  mutate(lag_observed = lag(observed)) 
+
+
+age_forecast <- age_forecast %>% 
+  group_by(model, age_group) %>% 
+  arrange(year) %>% 
+  mutate(lag_observed = lag(observed)) 
+
 
 system_mase <-
   system_forecast %>% filter(year >= 2000) %>% group_by(model, system) %>%
@@ -1190,21 +1253,85 @@ system_resid_plot <- system_forecast %>% filter(year >= 2000) %>%
   
   #Which years were predictable?
   
-  year_res <- system_forecast %>% filter(year >= 2000) %>% 
-    group_by(model, year) %>% 
-    summarize(mase_val = my_mase(observed,forecast, lag_observed),
-              rmse_val = yardstick::rmse_vec(observed, forecast)) 
-  
+# number of models with MASE < 1 by year
+
+
+yearly_struggles <- total_forecast %>%
+  filter(model != "lag", !is.na(lag_observed)) %>%
+  group_by(model, year) %>%
+  summarize(
+    mase_val = abs(observed - forecast) / abs(observed - lag_observed),
+    mape_val = yardstick::mape_vec(observed, forecast)
+  ) %>%
+  group_by(year) %>%
+  summarise(p_beat_lag = mean(mase_val < 1),
+            mean_mape = mean(mape_val))
+
+
+yearly_struggles_figure <- yearly_struggles %>%
+  ggplot(aes(year, mean_mape / 100, fill = p_beat_lag)) +
+  geom_hline(aes(yintercept = 0)) +
+  geom_col() + 
+  scale_y_continuous(labels = scales::label_percent(accuracy = 1), name = "Mean Absolute Percent Error",
+                     expand = c(0,NA)) + 
+  scale_x_continuous(name = '') +
+  scale_fill_viridis_c(labels = percent, name = "% Beating Lag")
+
+
+yearly_system_struggles <- system_forecast %>%
+  filter(model != "lag", !is.na(lag_observed)) %>%
+  group_by(model, year, system) %>%
+  summarize(
+    mase_val = abs(observed - forecast) / abs(observed - lag_observed),
+    mape_val = yardstick::mape_vec(observed, forecast)
+  ) %>%
+  group_by(year, system) %>%
+  summarise(p_beat_lag = mean(mase_val < 1),
+            mean_mape = mean(mape_val))
+
+
+yearly_system_struggles_figure <- yearly_system_struggles %>%
+  ggplot(aes(year, mean_mape / 100, fill = p_beat_lag)) +
+  geom_hline(aes(yintercept = 0)) +
+  geom_col() + 
+  scale_y_continuous(labels = scales::label_percent(accuracy = 1), name = "Mean Absolute Percent Error",
+                     expand = c(0,NA)) + 
+  scale_x_continuous(name = '') +
+  scale_fill_viridis_c(labels = percent, name = "% Beating Lag")+ 
+  facet_wrap(~system, scales = "free_y")
+
+
+yearly_age_struggles <- age_forecast %>%
+  filter(model != "lag", !is.na(lag_observed)) %>%
+  group_by(model, year, age_group) %>%
+  summarize(
+    mase_val = abs(observed - forecast) / abs(observed - lag_observed),
+    mape_val = yardstick::mape_vec(observed, forecast)
+  ) %>%
+  group_by(year, age_group) %>%
+  summarise(p_beat_lag = mean(mase_val < 1),
+            mean_mape = mean(mape_val))
+
+
+yearly_age_struggles_figure <- yearly_age_struggles %>%
+  ggplot(aes(year, mean_mape / 100, fill = p_beat_lag)) +
+  geom_hline(aes(yintercept = 0)) +
+  geom_col() + 
+  scale_y_continuous(labels = scales::label_percent(accuracy = 1), name = "Mean Absolute Percent Error",
+                     expand = c(0,NA)) + 
+  scale_x_continuous(name = '') +
+  scale_fill_viridis_c(labels = percent, name = "% Beating Lag")+ 
+  facet_wrap(~age_group, scales = "free_y")
+
   year_residual_plot <- year_res %>%
     ggplot(aes(
       x = year,
-      y = mase_val,
-      colour = model,
-      group = model
-    )) + geom_line() +
-    geom_point() +
-    geom_hline(yintercept = 1) + xlab("Return year") + ylab("MASE") +
-    theme(legend.position = c(.70, .8))
+      y = mase_val - 1,
+      fill = model
+    )) + 
+    geom_col(position = "dodge") +
+    geom_hline(yintercept = 0) + xlab("Return year") + ylab("MASE") +
+    theme(legend.position = c(.70, .9), legend.direction = "horizontal")
   
   #Years where all predictions are wrong
   year_res %>% filter(mase_val < 1) %>% group_by(year) %>%
@@ -1265,6 +1392,27 @@ system_resid_plot <- system_forecast %>% filter(year >= 2000) %>%
       theme(legend.position = c(.75, .15)) + ggtitle("Age Class 2_3") +
       xlab("Return Year") + ylab("Residuals")
   
+  # retrospective bias plot
+    
+    # retrospective_bias_plot <- complete_best_loo_preds %>% 
+    #   group_by(ret_yr, test_year) %>% 
+    #   summarise(ret = sum(ret) / 1000,
+    #             pred = sum(pred) / 1000) %>% 
+    #   ungroup() %>% 
+    #   filter(test_year %% 5 == 0) %>% 
+    #   ggplot() + 
+    #   geom_col(aes(ret_yr, ret),alpha = 0.5) + 
+    #   geom_line(aes(ret_yr, pred, color = ret_yr >= test_year),show.legend = FALSE,size = 1) + 
+    #   geom_point(aes(ret_yr, pred, fill = ret_yr >= test_year),show.legend = FALSE,size = 4, shape = 21) + 
+    #   scale_x_continuous(name = '') +
+    #   scale_y_continuous(name = "Returns (millions)")+
+    #   facet_wrap(~test_year) + 
+    #   theme(axis.text = element_text(angle = 45, vjust = 0, hjust = 1, size = 10))
+    # 
+    # retrospective_bias_plot
+    # 
+    
+    
 # save things -------------------------------------------------------------
 
 
