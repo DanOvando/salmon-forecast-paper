@@ -1151,7 +1151,7 @@ forecast_fit <- predframe %>%
       freshwater_cohort = freshwater_cohort,
       weight = weight_returns,
       trees = trees,
-      n_mtry = 5,
+      produce = "fits",
       forecast = TRUE,
       .progress = TRUE
     )

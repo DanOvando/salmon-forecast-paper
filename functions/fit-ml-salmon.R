@@ -610,7 +610,11 @@ fit_ml_salmon <- function(dep_age,
       parsnip::set_engine("xgboost") %>%
       parsnip::fit(formula(prepped_salmon), data = juice(prepped_salmon))
     # browser()
+    # browser()
     # importance_matrix <- xgboost::xgb.importance(colnames(juice(prepped_salmon)), model = trained_model$fit)
+    # importance_matrix <- xgboost::xgb.importance(trained_model$fit$feature_names, model = trained_model$fit)
+    
+    
     #
     #
     # xgboost::xgb.plot.importance(importance_matrix)
