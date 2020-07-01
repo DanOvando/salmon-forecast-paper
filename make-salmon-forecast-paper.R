@@ -1394,21 +1394,34 @@ yearly_age_struggles_figure <- yearly_age_struggles %>%
   
   # retrospective bias plot
     
-    # retrospective_bias_plot <- complete_best_loo_preds %>% 
-    #   group_by(ret_yr, test_year) %>% 
-    #   summarise(ret = sum(ret) / 1000,
-    #             pred = sum(pred) / 1000) %>% 
-    #   ungroup() %>% 
-    #   filter(test_year %% 5 == 0) %>% 
-    #   ggplot() + 
-    #   geom_col(aes(ret_yr, ret),alpha = 0.5) + 
-    #   geom_line(aes(ret_yr, pred, color = ret_yr >= test_year),show.legend = FALSE,size = 1) + 
-    #   geom_point(aes(ret_yr, pred, fill = ret_yr >= test_year),show.legend = FALSE,size = 4, shape = 21) + 
-    #   scale_x_continuous(name = '') +
-    #   scale_y_continuous(name = "Returns (millions)")+
-    #   facet_wrap(~test_year) + 
-    #   theme(axis.text = element_text(angle = 45, vjust = 0, hjust = 1, size = 10))
-    # 
+    
+    if (file.exists(file.path(results_dir, "parsnip_loo_preds.rds"))){
+      
+      parsnip_loo_preds <- read_rds(file.path(results_dir, "parsnip_loo_preds.rds"))
+      
+      loo_preds <- parsnip_loo_preds %>%
+        mutate(pred = map(pred,c("salmon_data"))) %>% 
+        unnest(cols = pred)
+      
+      retrospective_bias_plot <- loo_preds %>%
+        group_by(ret_yr, test_year, model_type, system) %>%
+        summarise(ret = sum(ret) / 1000,
+                  pred = sum(pred) / 1000) %>%
+        ungroup() %>%
+        filter(test_year %% 5 == 0, model_type == "rand_forest") %>%
+        ggplot() +
+        geom_col(aes(ret_yr, ret),alpha = 0.5) +
+        # geom_line(aes(ret_yr, pred, color = ret_yr >= test_year),show.legend = FALSE,size = 1) +
+        geom_point(aes(ret_yr, pred, fill = ret_yr >= test_year),show.legend = FALSE,size = 1, shape = 21) +
+        scale_x_continuous(name = '') +
+        scale_y_continuous(name = "Returns (millions)")+
+        facet_grid(system~test_year, scales = "free_y") +
+        theme(axis.text = element_text(angle = 45, vjust = 0, hjust = 1, size = 10))
+      
+    }
+    
+
+
     # retrospective_bias_plot
     # 
     
