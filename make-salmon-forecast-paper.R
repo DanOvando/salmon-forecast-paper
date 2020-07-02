@@ -24,7 +24,7 @@ run_dlm_forecast <- FALSE
 
 run_ml_forecast <- FALSE
 
-fit_statistical_ensemble <- TRUE
+fit_statistical_ensemble <- FALSE
 
 
 scalar <- 1000
@@ -1323,21 +1323,7 @@ yearly_age_struggles_figure <- yearly_age_struggles %>%
   scale_fill_viridis_c(labels = percent, name = "% Beating Lag")+ 
   facet_wrap(~age_group, scales = "free_y")
 
-  year_residual_plot <- year_res %>%
-    ggplot(aes(
-      x = year,
-      y = mase_val - 1,
-      fill = model
-    )) + 
-    geom_col(position = "dodge") +
-    geom_hline(yintercept = 0) + xlab("Return year") + ylab("MASE") +
-    theme(legend.position = c(.70, .9), legend.direction = "horizontal")
-  
-  #Years where all predictions are wrong
-  year_res %>% filter(mase_val < 1) %>% group_by(year) %>%
-    summarize(nmods = length(model))
-  
-  
+
   # repeat but by age classes
   
   age_system_mase <- forecasts %>%
