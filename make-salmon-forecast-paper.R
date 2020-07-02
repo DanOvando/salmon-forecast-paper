@@ -32,7 +32,7 @@ scalar <- 1000
 extrafont::loadfonts()
 
 pub_theme <-
-  hrbrthemes::theme_ipsum(base_size = 10, axis_text_size = 12) +
+  hrbrthemes::theme_ipsum(base_size = 12, axis_text_size = 12, axis_title_size = 14) +
   theme(
     panel.spacing = unit(1, "lines"),
     plot.margin = unit(rep(10, 4), units = "points")
@@ -391,7 +391,7 @@ forecasts <- forecasts %>%
 
 ensemble_forecasts <- temp %>% 
   filter(year == test_year) %>% 
-  mutate(model = "ensemble") %>% 
+  mutate(model = "boost_tree_ensemble") %>% 
   mutate(observed = observed * scalar,
          ensemble_forecast = ensemble_forecast * scalar) 
 
@@ -501,8 +501,15 @@ system_forecast_plot <- system_forecast %>%
 system_forecast_plot
 
 # evaluate performance
+mase_foo <- function(observed, forecast, lag_mae){
+  mase <- mean(abs(observed- forecast)) / mean(lag_mae)
+  
+}
+
 
 age_system_performance <- age_system_forecast %>% 
+  group_by(age_group, system) %>% 
+  mutate(lag_mae = mean(abs(observed[model == "lag"] - forecast[model == "lag"]))) %>% 
   group_by(age_group, system, model) %>% 
   arrange(year) %>% 
   summarise(rmse = yardstick::rmse_vec(truth = observed, estimate = forecast),
@@ -510,12 +517,14 @@ age_system_performance <- age_system_forecast %>%
             ccc = yardstick::ccc_vec(truth = observed, estimate = forecast),
             mape = yardstick::mape_vec(truth = observed, estimate = forecast),
             mae = yardstick::mae_vec(truth = observed, estimate = forecast),
-            mase = yardstick::mase_vec(truth = observed, estimate = forecast),
+            mase = mase_foo(observed = observed, forecast = forecast, lag_mae = lag_mae),
             bias = mean(forecast - observed)) %>% 
   ungroup()
 
 
 total_performance <- total_forecast %>% 
+  ungroup() %>% 
+  mutate(lag_mae = mean(abs(observed[model == "lag"] - forecast[model == "lag"]))) %>% 
   group_by(model) %>% 
   arrange(year) %>% 
   summarise(rmse = yardstick::rmse_vec(truth = observed, estimate = forecast),
@@ -523,42 +532,33 @@ total_performance <- total_forecast %>%
             ccc = yardstick::ccc_vec(truth = observed, estimate = forecast),
             mape = yardstick::mape_vec(truth = observed, estimate = forecast),
             mae = yardstick::mae_vec(truth = observed, estimate = forecast),
-            mase = yardstick::mase_vec(truth = observed, estimate = forecast),
-            bias = mean(forecast - observed)) %>% 
-  ungroup() %>% 
-  arrange(mase)
-
-recent <- total_forecast %>% 
-  filter(year >= 2014) %>% 
-  group_by(model) %>% 
-  summarise(rmse = yardstick::rmse_vec(truth = observed, estimate = forecast),
-            r2 = yardstick::rsq_vec(truth = observed, estimate = forecast),
-            ccc = yardstick::ccc_vec(truth = observed, estimate = forecast),
-            mape = yardstick::mape_vec(truth = observed, estimate = forecast),
-            mae = yardstick::mae_vec(truth = observed, estimate = forecast),
-            mase = yardstick::mase_vec(truth = observed, estimate = forecast),
+            mase = mase_foo(observed = observed, forecast = forecast, lag_mae = lag_mae),
             bias = mean(forecast - observed)) %>% 
   ungroup() %>% 
   arrange(mase)
 
 system_performance <- system_forecast %>% 
+  group_by(system) %>% 
+  mutate(lag_mae = mean(abs(observed[model == "lag"] - forecast[model == "lag"]))) %>% 
   group_by(model, system) %>% 
   summarise(rmse = yardstick::rmse_vec(truth = observed, estimate = forecast),
             r2 = yardstick::rsq_vec(truth = observed, estimate = forecast),
             mae = yardstick::mae_vec(truth = observed, estimate = forecast),
-            mase = yardstick::mase_vec(truth = observed, estimate = forecast),
+            mase = mase_foo(observed = observed, forecast = forecast, lag_mae = lag_mae),
             bias = mean(forecast - observed)) %>% 
   ungroup() %>% 
   arrange(mase)
 
 age_performance <- age_forecast %>% 
+  group_by(age_group) %>% 
+  mutate(lag_mae = mean(abs(observed[model == "lag"] - forecast[model == "lag"]))) %>% 
   group_by(model, age_group) %>% 
   summarise(rmse = yardstick::rmse_vec(truth = observed, estimate = forecast),
             r2 = yardstick::rsq_vec(truth = observed, estimate = forecast),
             ccc = yardstick::ccc_vec(truth = observed, estimate = forecast),
             mape = yardstick::mape_vec(truth = observed, estimate = forecast),
             mae = yardstick::mae_vec(truth = observed, estimate = forecast),
-            mase = yardstick::mase_vec(truth = observed, estimate = forecast),
+            mase = mase_foo(observed = observed, forecast = forecast, lag_mae = lag_mae),
             bias = mean(forecast - observed)) %>% 
   ungroup() %>% 
   arrange(mase)
@@ -636,12 +636,6 @@ top_systems <- forecasts$system %>% unique()
 salmon_data <- salmon_data %>% 
   filter(age_group %in% top_age_groups) %>% 
   mutate(ret = ret/ 1000)
-
-
-
-
-
-
 
 ## ----age-sys-return-plot------------------------------------------------------
 
@@ -805,9 +799,10 @@ system_performance %>%
   group_by(system) %>% 
   arrange(mase) %>% 
   gt() %>%
-  fmt_number(columns = which(map_lgl(., is.numeric)),
-             decimals = 2)
+  fmt_number(columns = 2:7,
+             decimals = 1)
 
+  
 
 
 # figure 1 ----------------------------------------------------------------
@@ -927,11 +922,12 @@ pal <- pnw_palette("Winter",n = n_distinct(system_performance$model))
 
 top_models <- system_performance %>% 
   group_by(system) %>% 
-  # filter(model == "dlm") %>%
+  filter(!model %in% c('boost_tree_ensemble','fri')) %>%
   filter(mase == min(mase)) %>% 
   mutate(combo = paste(system, model, sep = "_"))
 
 next_best <- system_performance %>% 
+  filter(!model %in% c('boost_tree_ensemble','fri')) %>%
   group_by(system) %>% 
   mutate(model_rank = rank(mase)) %>% 
   filter(model_rank < 3) %>% 
@@ -964,6 +960,7 @@ system_forecast_figure
 # figure 4 ----------------------------------------------------------------
 
 top_models <- age_performance %>% 
+  filter(!model %in% c('boost_tree_ensemble','fri')) %>%
   group_by(age_group) %>% 
   filter(mase == min(mase)) %>% 
   mutate(combo = paste(age_group, model, sep = "_")) %>% 
@@ -981,6 +978,7 @@ age_forecast_figure <- top_age_forecast %>%
   facet_wrap(~age_group, scales = "free_y")
 
 next_best <- age_performance %>% 
+  filter(!model %in% c('boost_tree_ensemble','fri')) %>%
   group_by(age_group) %>% 
   mutate(model_rank = rank(mase)) %>% 
   filter(model_rank < 3) %>% 
@@ -1014,11 +1012,13 @@ age_forecast_figure
 # figure n ----------------------------------------------------------------
 
 top_models <- total_performance %>% 
+  filter(!model %in% c('boost_tree_ensemble','fri')) %>%
   filter(mase == min(mase)) %>% 
   mutate(combo = paste(model, sep = "_")) %>% 
   ungroup()
 
 next_best <- total_performance %>% 
+  filter(!model %in% c('boost_tree_ensemble','fri')) %>%
   mutate(model_rank = rank(mase)) %>% 
   filter(model_rank < 3) %>% 
   summarise(model = model[model_rank == 1],
@@ -1045,6 +1045,64 @@ total_forecast_figure <- top_total_forecast %>%
 
 total_forecast_figure
 
+
+
+# ensemble performance
+
+
+pal <- pnw_palette("Winter",n = n_distinct(system_performance$model))
+
+top_ensemble <- system_performance %>% 
+  group_by(system) %>% 
+  filter(model %in% c('boost_tree_ensemble','fri')) %>%
+  filter(mase == min(mase)) %>% 
+  select(model, system, mase) %>% 
+  rename(ens_mase = mase) %>% 
+  ungroup() %>% 
+  mutate(combo = paste(system, model, sep = "_"))
+  
+
+top_non_ensemble <- system_performance %>% 
+  group_by(system) %>% 
+  filter(!model %in% c('boost_tree_ensemble','fri')) %>%
+  filter(mase == min(mase)) %>% 
+  select(system, mase) %>%
+  ungroup()
+  
+ensemble_performance <- top_ensemble %>% 
+  left_join(top_non_ensemble, by = "system") %>% 
+  mutate(ens_improvement = 1 - ens_mase / mase)
+
+
+top_ensemble_system_forecast <- system_forecast %>% 
+  mutate(combo = paste(system, model, sep = "_")) %>% 
+  filter(combo %in% top_ensemble$combo) %>% 
+  left_join(ensemble_performance, by = c("system","model"))
+
+system_ensemble_forecast_figure <- top_ensemble_system_forecast %>% 
+  ggplot() + 
+  geom_area(aes(year, observed), fill = "darkgray") + 
+  geom_point(aes(year, forecast, shape = model, fill = ens_improvement), size = 3) +
+  scale_fill_gradient2(low = "tomato", high = "steelblue", mid = "white", midpoint = 0,labels = label_percent(accuracy = 1),
+                       guide = guide_colorbar(frame.colour = "black", ticks.colour = "black"),
+                       name = "% Ensemble Improvement") +
+  # fishualize::scale_fill_fish_d(option = "Trimma_lantana") + 
+  # fishualize::scale_color_fish_d(option = "Trimma_lantana") + 
+  # scale_alpha_continuous(range = c(1,0.25), name = "MASE") +
+  scale_shape_manual(values = c(23,21), name = '') +
+  scale_x_continuous(name = '') + 
+  scale_y_continuous(expand = expansion(c(0,.05)), name = "Returns (Millions of Salmon)") + 
+  theme(legend.direction = "horizontal", 
+        legend.position = c(.7,.2)) + 
+  facet_wrap(~system, scales = "free_y")
+  
+
+  
+# choose best by system from ensemble or FRI
+
+# make shape model type
+# make color percent difference in MASE between ensemble and the next best non-ensemble method
+# where blue is an improvement and red is a loss and white means no change
 
 ## -----------------------------------------------------------------------------
 
@@ -1256,6 +1314,27 @@ system_resid_plot <- system_forecast %>% filter(year >= 2000) %>%
 # number of models with MASE < 1 by year
 
 
+# system residuals --------------------------------------------------------
+
+yearly_system_resid_struggles_figure <- system_forecast %>% 
+  mutate(resids = forecast - observed) %>% 
+  filter(!model %in% c("boost_tree_ensemble","fri")) %>% 
+  ggplot(aes(year, resids, color = model)) + 
+  geom_hline(aes(yintercept = 0)) +
+  geom_line() + 
+  facet_wrap(~system, scales = "free_y") + 
+  # scale_color_simpsons(name = '') +
+  # fishualize::scale_color_fish_d(option = "Trimma_lantana", name = '') + 
+  theme(legend.position = c(0.7, .15), 
+        legend.direction = "horizontal") + 
+  scale_x_continuous(name = "") + 
+  scale_y_continuous(name = "Residuals (millions of fish)")
+
+yearly_system_resid_struggles_figure
+# other struggles ---------------------------------------------------------
+
+
+
 yearly_struggles <- total_forecast %>%
   filter(model != "lag", !is.na(lag_observed)) %>%
   group_by(model, year) %>%
@@ -1378,7 +1457,66 @@ yearly_age_struggles_figure <- yearly_age_struggles %>%
       theme(legend.position = c(.75, .15)) + ggtitle("Age Class 2_3") +
       xlab("Return Year") + ylab("Residuals")
   
-  # retrospective bias plot
+    
+
+# VOI plot ----------------------------------------------------------------
+
+    if (file.exists(file.path(results_dir, "next_forecast.rds"))){
+      
+      next_forecast <- read_rds(file.path(results_dir, "next_forecast.rds")) %>% 
+        filter(model_type == "boost_tree")
+      
+      next_forecast <- next_forecast %>% 
+        mutate(model_fit = map(pred, c("trained_model","fit")))
+      
+      
+      get_importance <- function(fit){
+      
+      importance_matrix <- xgboost::xgb.importance(fit$feature_names, model =fit)
+      
+      # xgboost::xgb.ggplot.importance(importance_matrix)
+      # 
+      
+      }
+      
+      next_forecast <- next_forecast %>% 
+        mutate(importance = map(model_fit, safely(get_importance)))
+      
+      has_importance <- map_lgl(map(next_forecast$importance,"error"), is.null)
+      
+      var_importance <- next_forecast %>% 
+        filter(has_importance) %>% 
+        mutate(importance = map(importance, "result")) %>% 
+        select(-pred,-model_fit) %>% 
+        unnest(cols = importance) %>% 
+        mutate(short_feature = str_replace_all(Feature,"age_\\d_","past_")) %>% 
+        mutate(short_feature = str_remove_all(short_feature,"rugg_"))
+      
+      
+      system_importance <- var_importance %>% 
+        group_by(pred_system, short_feature) %>% 
+        summarise(mean_importance = mean(Gain))
+      
+    
+      system_varimportance_figure <- system_importance %>% 
+        filter(mean_importance > 0.05) %>% 
+        ggplot(aes(reorder(short_feature,mean_importance), mean_importance)) + 
+        geom_col() + 
+        facet_wrap(~ pred_system, scales = "free") + 
+        scale_x_discrete(name = "Variable") +
+        scale_y_continuous(name = "Mean Variable Importance") + 
+        coord_flip() 
+        
+      system_varimportance_figure
+  
+      
+      }
+      
+    
+
+# retrospective bias plot -------------------------------------------------
+
+    
     
     
     if (file.exists(file.path(results_dir, "parsnip_loo_preds.rds"))){
@@ -1438,3 +1576,4 @@ plotfoo <- function(x,height = 6, width = 9 , device = "pdf",path){
 }
 
 walk(plots, plotfoo, path = fig_path, device = "png")
+
