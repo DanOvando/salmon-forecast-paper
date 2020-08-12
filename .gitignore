@@ -8,9 +8,14 @@ results/**/fits/
 *.png
 *.pdf
 *.docx
+*.html
+*.jpg
+*.js
+presentations/processor-meeting-jan-2020
+presentations/asp-2019
 !results/**/*_loo_results.csv
 !results/**/ensemble_fits.rds
-
+*.key
 data/*.rds
 data/*erddap*
 # Session Data files

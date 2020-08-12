@@ -894,6 +894,22 @@ return_plot
 
 
 
+age_system_return_plot <- salmon_data %>% 
+  filter(system %in% top_systems) %>% 
+  group_by(year, age_group, system) %>% 
+  summarise(ret = sum(ret)) %>% 
+  ggplot(aes(year, ret, fill = (age_group))) + 
+  geom_area(alpha = 1) + 
+  scale_y_continuous(name = "", expand = expansion()) + 
+  scale_x_continuous(name = 'Year') +
+  scale_fill_viridis_d(option = "plasma", name = 'Age Group') + 
+  labs(subtitle = "C") +
+  theme(plot.margin = unit(c(0,0,0,0), units = "lines")) + 
+  facet_wrap(~system, scales = "free_y")
+
+
+age_system_return_plot
+
 # plot_area <- (alaska_bbox['xmax'] - alaska_bbox['xmin']) *  (alaska_bbox['ymax'] - alaska_bbox['ymin'])
 # 
 # df <- tibble(x = alaska_bbox["xmin"] * 0.9,
@@ -1461,15 +1477,97 @@ yearly_age_struggles_figure <- yearly_age_struggles %>%
 
 # VOI plot ----------------------------------------------------------------
 
+    run_importance <- FALSE
+    
     if (file.exists(file.path(results_dir, "next_forecast.rds"))){
       
-      next_forecast <- read_rds(file.path(results_dir, "next_forecast.rds")) %>% 
+      next_forecast <- read_rds(file.path(results_dir, "next_forecast.rds"))
+      
+      latest_forecast <- next_forecast %>%
+        mutate(pred = map(pred,"salmon_data")) %>%
+        unnest(cols = pred) %>% 
+        ungroup() %>% 
+        filter(ret_yr == max(ret_yr))
+      
+      
+      latest_forecast %>% 
+        group_by(model_type) %>% 
+        summarise(forecast = sum(pred))
+      
+      raw_forecast_table <- latest_forecast %>% 
+        ungroup() %>% 
+        filter(ret_yr == max(ret_yr)) %>% 
+        rename(forecast = pred,
+               age_group = dep_age,
+               year = ret_yr,
+               model = model_type) %>% 
+        ungroup() %>% 
+        mutate(
+          age_group = str_replace(age_group, "\\.","_"),
+          age_group= forcats::fct_relevel(age_group, c("1_2","1_3","2_2","2_3"))) %>% 
+        select(year, system, age_group, forecast, model) %>% 
+        bind_rows(forecasts %>% select(year, system, age_group, forecast, model)) %>% 
+        group_by(system, year, model) %>%
+        mutate(forecast = forecast) %>% 
+        mutate(Totals = sum(forecast)) %>%
+        ungroup() %>% 
+        arrange(year, age_group) %>% 
+        pivot_wider(names_from = age_group, values_from = forecast) %>% 
+        select(dplyr::everything(),-Totals, Totals) %>% 
+        arrange(desc(year))
+      
+      raw_forecast_table %>%
+        pivot_longer(contains("_"), names_to = "age_group", values_to = "forecast") %>%
+        group_by(year, model) %>%
+        summarise(total_forecast = sum(forecast)) %>%
+        ungroup() %>%
+        ggplot(aes(year, total_forecast, color  = model)) +
+        geom_line()
+      
+      write_csv(raw_forecast_table %>% mutate_if(is.numeric,round), file.path(results_dir, "raw-machine-learning-forecast-table.csv"))
+      
+      total_vars <- colnames(raw_forecast_table)
+      
+      total_vars <- total_vars[str_detect(total_vars,"(\\.)|(Totals)")]
+      
+      forecast_table <- raw_forecast_table %>%
+        filter(model %in% c("rand_forest", "boost_tree"), year == 2020) %>%
+        group_by(year, model) %>%
+        gt(rowname_col = "system") %>%
+        summary_rows(
+          groups = TRUE,
+          columns = vars(total_vars) ,
+          fns = list(Totals = "sum"),
+          formatter = fmt_number,
+          decimals = 0,
+          use_seps = TRUE
+          
+        ) %>%
+        gt::fmt_number(columns = total_vars, decimals = 0) %>%
+        gt::tab_spanner(label = "Age Group",
+                        columns = (total_vars[total_vars != "Totals"])) %>%
+        gt::tab_style(
+          style = cell_text(weight = "bold"),
+          locations = list(cells_summary(),
+                           cells_body(columns = vars(Totals)))
+        )
+      
+      
+        
+        if (run_importance == TRUE) {
+        
+          boost_forecast <- next_forecast %>% 
         filter(model_type == "boost_tree")
-      
-      next_forecast <- next_forecast %>% 
+
+      a <- boost_forecast %>% 
+        mutate(pred = map(pred, "salmon_data")) %>% 
+        unnest(cols = pred) %>% 
+        group_by(test_year, model_type) %>% 
+        summarise(pred = sum(pred))
+            
+      boost_forecast <- boost_forecast %>% 
         mutate(model_fit = map(pred, c("trained_model","fit")))
-      
-      
+
       get_importance <- function(fit){
       
       importance_matrix <- xgboost::xgb.importance(fit$feature_names, model =fit)
@@ -1479,12 +1577,12 @@ yearly_age_struggles_figure <- yearly_age_struggles %>%
       
       }
       
-      next_forecast <- next_forecast %>% 
+      boost_forecast <- boost_forecast %>% 
         mutate(importance = map(model_fit, safely(get_importance)))
       
-      has_importance <- map_lgl(map(next_forecast$importance,"error"), is.null)
+      has_importance <- map_lgl(map(boost_forecast$importance,"error"), is.null)
       
-      var_importance <- next_forecast %>% 
+      var_importance <- boost_forecast %>% 
         filter(has_importance) %>% 
         mutate(importance = map(importance, "result")) %>% 
         select(-pred,-model_fit) %>% 
@@ -1509,6 +1607,7 @@ yearly_age_struggles_figure <- yearly_age_struggles %>%
         
       system_varimportance_figure
   
+        } # close importance
       
       }
       

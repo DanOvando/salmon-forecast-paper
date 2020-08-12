@@ -1,0 +1,281 @@
+---
+title: "salmon-figs"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+```{r, cache = TRUE, include = FALSE}
+library(tidyverse)
+library(here)
+library(hrbrthemes)
+library(extrafont)
+library(patchwork)
+extrafont::loadfonts()
+
+source(here("output","compare_predictions.R"))
+
+theme_set(hrbrthemes::theme_ipsum(axis_text_size = 16,
+                                  axis_title_size = 18,
+                                  base_size = 20,
+                                  strip_text_size = 16
+                                  ))
+
+scalar <- 1000
+
+all_preds$observed <-all_preds$observed / scalar
+
+all_preds$predicted <-all_preds$predicted / scalar
+
+
+```
+
+
+# plots
+
+```{r}
+
+fri_skill_plot <- all_preds %>%
+  group_by(model, ret_yr) %>%
+  summarise(observed = sum(observed),
+            predicted = sum(predicted)) %>%
+  filter(model == "FRI_pred") %>%
+  ggplot() +
+  geom_col(aes(ret_yr, observed, fill = "Observed")) +
+  geom_point(aes(ret_yr, predicted, fill = "Predicted"),
+             size = 4,
+             shape = 21) + 
+  labs(x = "Year", y = "Returns (millions)") + 
+  theme(legend.position = "top") + 
+  scale_fill_colorblind(name = '')
+
+fri_error <- all_preds %>%
+  group_by(model, ret_yr) %>%
+  summarise(observed = sum(observed),
+            predicted = sum(predicted)) %>%
+  filter(model == "FRI_pred") %>% 
+  mutate(error = predicted - observed) %>% 
+  ggplot(aes(error,y = ..density..)) + 
+  geom_histogram(bins = 6,alpha = 0.75) + 
+  geom_vline(aes(xintercept = mean(error)), color = "red", linetype = 2) +
+  geom_vline(aes(xintercept =0)) +
+  scale_y_percent(name = "Density") + 
+  labs(x = "Error (predicted - observed)")
+
+fri_perf_plot <- fri_skill_plot + fri_error + patchwork::plot_layout(widths = c(2,1))
+
+fit_forests <- FALSE
+
+run_query_erddap <-  FALSE
+
+weight_returns <- FALSE
+
+run <- "v1.0"
+
+description <- "version 1.0 but without weighting of model by run size and no spawners"
+
+rundir <- here("machine-learning", "results", run)
+
+if (!dir.exists(rundir)) {
+  dir.create(rundir, recursive = TRUE)
+  
+  dir.create(file.path(rundir, "figs"), recursive = TRUE)
+  
+  dir.create(file.path(rundir, "fits"), recursive = TRUE)
+  
+  
+}
+
+write(description, file = file.path(rundir, "description.txt"))
+
+last_year <- 2018 # the final year in the data
+
+min_year <- 1965 # only include data greater than or equal this year
+
+age_groups <- 4 #number of top age groups to include
+
+test_year <- 2000 # the year splitting the test and training data
+
+scalar <-
+  10000 # number do divide the total returns by just to get the data a bit closer to the -1 to 1 range
+  
+
+source(here("machine-learning","scripts","load-data.R"))
+
+data$ret <- data$ret / 1000
+
+age_corr_plot <- data %>% 
+  group_by(ret_yr, age_group) %>% 
+  summarise(returns = sum(ret, na.rm = TRUE)) %>% 
+  spread(age_group, returns) %>% 
+  ungroup() %>% 
+  select(-ret_yr) %>% 
+  corrr::correlate() %>% 
+  corrr::network_plot() 
+
+system_corr_plot <- data %>% 
+  group_by(ret_yr, system) %>% 
+  summarise(returns = sum(ret, na.rm = TRUE)) %>% 
+  spread(system, returns) %>% 
+  ungroup() %>% 
+  select(-ret_yr) %>% 
+  corrr::correlate() %>% 
+  corrr::network_plot() 
+
+rugg_salmon_plot <- rugg_salmon %>%
+  select(-contains("korea")) %>%
+  corrr::correlate() %>%
+  corrr::network_plot() 
+
+```
+
+```{r enviro-plots}
+
+env_ret_plot <- data %>% 
+  select(ret, contains("env")) %>% 
+  gather("variable","value",-ret) %>% 
+  ggplot(aes(value, ret, fill = variable)) + 
+  geom_point(shape = 21, show.legend = FALSE, alpha = 0.75, size = 3) + 
+  facet_wrap(~variable, scales = "free_x") + 
+  scale_fill_colorblind() + 
+  labs(x = "Environmental Value", y = "Returns")
+
+
+```
+
+demographic plots 
+
+```{r}
+lag_skill_plot <- all_preds %>%
+  group_by(model, ret_yr) %>%
+  summarise(observed = sum(observed),
+            predicted = sum(predicted)) %>%
+  filter(model == "lag_pred") %>%
+  ggplot( aes(predicted, observed)) +
+  geom_abline(aes(slope = 1, intercept = 0)) +
+  geom_point(
+       size = 4,
+    shape = 21,
+    fill = "steelblue"
+  )  +
+  geom_smooth(method = "lm")
+
+
+mean_skill_plot <- all_preds %>%
+  group_by(model, ret_yr) %>%
+  summarise(observed = sum(observed),
+            predicted = sum(predicted)) %>%
+  filter(model == "running_mean_pred") %>%
+  ggplot( aes(predicted, observed)) +
+  geom_abline(aes(slope = 1, intercept = 0)) +
+  geom_point(
+       size = 4,
+    shape = 21,
+    fill = "steelblue"
+  )  +
+  geom_smooth(method = "lm")
+
+lag_age_skill_plot <- all_preds %>%
+  group_by(model, ret_yr, age) %>%
+  summarise(observed = sum(observed),
+            predicted = sum(predicted)) %>%
+  filter(model == "lag_pred") %>%
+  ggplot( aes(predicted, observed)) +
+  geom_abline(aes(slope = 1, intercept = 0)) +
+  geom_point(
+       size = 4,
+    shape = 21,
+    fill = "steelblue"
+  )  +
+  geom_smooth(method = "lm") + 
+  facet_wrap(~age, scales = "free")
+
+  
+  
+```
+
+
+
+
+# tree examples
+
+
+```{r}
+
+library(rpart)
+tree <-
+  rpart::rpart(ret ~ ., data = data %>% sample_n(500) %>% as.data.frame())
+
+
+rpart.plot::rpart.plot(tree)
+
+
+fit <- rpart(Kyphosis ~ Age + Number + Start, data = kyphosis)
+
+rpart.plot::rpart.plot(fit)
+
+
+```
+
+```{r}
+age_performance_summary_plot <- age_performance_summary %>% 
+  gather(metric,value, -model,-age) %>% 
+  filter(metric %in% c("rmse","rsq"),
+         model %in% c("FRI", "forest","running_mean")) %>% 
+  ggplot(aes(model, value, fill = model)) + 
+  geom_col(position = "dodge", show.legend = FALSE)  + 
+  facet_grid(age~metric, scales = "free") + 
+  coord_flip()  + 
+  scale_fill_colorblind() + 
+  labs(x = '', y = '') + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+system_performance_summary_plot <- system_performance_summary %>% 
+  gather(metric,value, -model,-system) %>% 
+  filter(metric %in% c("rmse","rsq"),
+         model %in% c("FRI", "forest","running_mean")) %>% 
+  ggplot(aes(model, value, fill = model)) + 
+  geom_col(position = "dodge", show.legend = FALSE)  + 
+  facet_grid(system~metric, scales = "free") + 
+  coord_flip()  + 
+  scale_fill_colorblind() + 
+  theme_minimal() +
+  labs(x = '', y = '') + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
+
+spawner recruits
+```{r}
+spawners <-
+  read_csv(here("Data", "Bristol Bay Spawner-Recruit Data.csv")) %>%
+  janitor::clean_names() %>%
+  select(system, brood_yr, spawn, rec) %>%
+  rename(spawners = spawn) %>%
+  mutate(spawners = spawners / 1000)
+
+spawners %>% 
+  ggplot(aes(spawners, rec, color = system)) + 
+  geom_point(show.legend = FALSE) + 
+  facet_wrap(~system, scales = "free") + 
+  theme_minimal()
+```
+
+```{r}
+plots <- ls()[stringr::str_detect(ls(),"_plot")]
+
+savefoo <- function(p, dev = "pdf", height = 8, width = 10){
+  
+  ggsave(filename = here("machine-learning","presentations",paste(p,dev,sep = '.')),get(p),
+         height = height, width = width)
+  
+}
+
+purrr::walk(plots, savefoo)
+
+```
+
+
