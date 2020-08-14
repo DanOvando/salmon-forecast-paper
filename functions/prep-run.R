@@ -22,6 +22,8 @@ prep_run <- function(results_name,
   library(patchwork)
   library(fishualize)
   library(PNWColors)
+  library(cowplot)
+  library(magick)
 
   # for edm script
   

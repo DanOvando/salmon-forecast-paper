@@ -16,6 +16,13 @@
       "Repository": "CRAN",
       "Hash": "8f9ce74c6417d61f0782cbae5fd2b7b0"
     },
+    "Cairo": {
+      "Package": "Cairo",
+      "Version": "1.5-12.2",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "5f09ea90a07218b11c6430b7ca71fee7"
+    },
     "Cubist": {
       "Package": "Cubist",
       "Version": "0.2.3",
@@ -169,13 +176,6 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "84a03997fbb5acfb3c9b43bad88fea1f"
-    },
-    "RcppThread": {
-      "Package": "RcppThread",
-      "Version": "0.5.4",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "36e1c538df6e0133891204aee0acdfc0"
     },
     "Rttf2pt1": {
       "Package": "Rttf2pt1",
@@ -405,6 +405,13 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "30b72e5faca1f055682ef32a0e252edb"
+    },
+    "cowplot": {
+      "Package": "cowplot",
+      "Version": "1.0.0",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "82bae0172ae9d4c4f88a440ad01f73bb"
     },
     "crayon": {
       "Package": "crayon",
@@ -678,20 +685,6 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "eee36211f74e4dbc80eae9d504b58f0b"
-    },
-    "ggExtra": {
-      "Package": "ggExtra",
-      "Version": "0.9",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "e1651e764e09a4ff25ff978e33f1d6fa"
-    },
-    "gganimate": {
-      "Package": "gganimate",
-      "Version": "1.0.6",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "1a34307f6fca1bc7391586860ea0aa55"
     },
     "ggplot2": {
       "Package": "ggplot2",
@@ -1027,20 +1020,6 @@
       "Repository": "CRAN",
       "Hash": "d908914ae53b04d4c0c0fd72ecc35370"
     },
-    "leaflet": {
-      "Package": "leaflet",
-      "Version": "2.0.3",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "3f3f5e5603fc791dfb77279ad84cc711"
-    },
-    "leaflet.providers": {
-      "Package": "leaflet.providers",
-      "Version": "1.9.0",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "d3082a7beac4a1aeb96100ff06265d7e"
-    },
     "lhs": {
       "Package": "lhs",
       "Version": "1.0.2",
@@ -1089,6 +1068,13 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "fc1c91e2e8d9e1fc932e75aa1ed989b7"
+    },
+    "magick": {
+      "Package": "magick",
+      "Version": "2.4.0",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "40a9efbb0418902cf6b663a1529a975a"
     },
     "magrittr": {
       "Package": "magrittr",
@@ -1405,10 +1391,15 @@
     },
     "rEDM": {
       "Package": "rEDM",
-      "Version": "1.5.0",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "e292955697b7eef41b21672bf7af860a"
+      "Version": "0.7.5",
+      "Source": "GitHub",
+      "RemoteType": "github",
+      "RemoteHost": "api.github.com",
+      "RemoteRepo": "rEDM",
+      "RemoteUsername": "ha0ye",
+      "RemoteRef": "HEAD",
+      "RemoteSha": "ab6e6837a4bf4d0a54e49b26f40e3416c283e721",
+      "Hash": "49a07b5072012773a7fae0a8f9143eb5"
     },
     "ranger": {
       "Package": "ranger",
@@ -1423,13 +1414,6 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "8c8298583adbbe76f3c2220eef71bebc"
-    },
-    "raster": {
-      "Package": "raster",
-      "Version": "3.3-7",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "65e108f1cb1cd93c7691eb05b4668b9b"
     },
     "readr": {
       "Package": "readr",
@@ -1475,10 +1459,15 @@
     },
     "renv": {
       "Package": "renv",
-      "Version": "0.11.0",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "1c3ef87cbb81c23ac96797781ec7aecc"
+      "Version": "0.11.0-23",
+      "Source": "GitHub",
+      "RemoteType": "github",
+      "RemoteHost": "api.github.com",
+      "RemoteRepo": "renv",
+      "RemoteUsername": "rstudio",
+      "RemoteRef": "HEAD",
+      "RemoteSha": "735e17f696e17873895891f4e0a84c578344e0f6",
+      "Hash": "20fb217cf440deee2d5d5c9e7c868c65"
     },
     "reprex": {
       "Package": "reprex",
@@ -1632,13 +1621,6 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "8ecd38ae23eea07aad8d4136f9a2fd63"
-    },
-    "servr": {
-      "Package": "servr",
-      "Version": "0.17",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "a59f16bb4cb2280bebe6b7726103af66"
     },
     "sf": {
       "Package": "sf",
@@ -1918,13 +1900,6 @@
       "Repository": "CRAN",
       "Hash": "aee6ea4a954eeba5a2327abd2adc0034"
     },
-    "tweenr": {
-      "Package": "tweenr",
-      "Version": "1.0.1",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "fc77eb5297507cccfa3349a606061030"
-    },
     "units": {
       "Package": "units",
       "Version": "0.6-7",
@@ -1988,13 +1963,6 @@
       "Repository": "CRAN",
       "Hash": "ce4f6271baa94776db692f1cb2055bee"
     },
-    "wesanderson": {
-      "Package": "wesanderson",
-      "Version": "0.3.6",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "42f92f1e9ef722355959ec1f7c459636"
-    },
     "whisker": {
       "Package": "whisker",
       "Version": "0.4",
@@ -2015,18 +1983,6 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "e5ea76a340843e8c6b77d953401b91e4"
-    },
-    "xaringan": {
-      "Package": "xaringan",
-      "Version": "0.16.1",
-      "Source": "GitHub",
-      "RemoteType": "github",
-      "RemoteHost": "api.github.com",
-      "RemoteRepo": "xaringan",
-      "RemoteUsername": "yihui",
-      "RemoteRef": "master",
-      "RemoteSha": "125c2376756c82132af3b32bb045e94408e767cf",
-      "Hash": "9028ea23966f60ad2543c046ef3f020f"
     },
     "xfun": {
       "Package": "xfun",

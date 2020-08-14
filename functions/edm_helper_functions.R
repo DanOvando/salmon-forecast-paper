@@ -179,7 +179,7 @@ copred_regime <- function(input = dat, years, E_vals = 1:10, focus_col = "ret_st
     pred_inds <- range(which(temp$unq == combos[yy, 'pred']))
 
     bestE <- simplex(temp[, focus_col], lib = lib_inds, pred = pred_inds, E = E_vals,
-      silent = T, stats_only = F) %>% filter(mae == min(mae))
+      silent = T, stats_only = F) %>%  mutate(mae = as.numeric(mae)) %>% filter(mae == min(mae))
     bestE$copred <- paste(combos[yy, 'lib'], "to", combos[yy, 'pred'])
     bestE$lib_loc <- combos[yy, 'lib']
     bestE$pred_loc <- combos[yy, 'pred']
@@ -239,10 +239,11 @@ oos_prediction <- function(regimes_in, dat_in, npreds = 5, focus_col = 'ret_std'
     lib_E <- simplex(temp[, focus_col], E = E_vals, silent = T, 
                      stats_only = F, lib = c(1, nrow(temp)),
                      pred = pred_inds) %>% filter(num_pred != 0, 
-                   mae == min(mae, na.rm = T)) %>% pull(E)  
+                   mae == min(mae, na.rm = T)) %>%  mutate(mae = as.numeric(mae)) %>% pull(E)  
     lib_theta <- s_map(temp[, focus_col], E = lib_E,
       silent = T, stats_only = F, lib = c(1, nrow(temp)),
       pred = pred_inds, theta = seq(0, 10, .5)) %>% 
+      mutate(mae = as.numeric(mae)) %>%
       filter(num_pred != 0, mae == min(mae, na.rm = T)) %>% pull(theta)
 
     #------------------------------------
@@ -312,19 +313,19 @@ block_smap_pred <- function(predyr, input, pred_col, bestE = NA,
 
   #Identify attractor characteristics
   if(is.na(bestE)){
-    bestE <- simplex(input[, pred_col], E = 1:10, lib = lib_inds,
-      pred = lib_inds, silent = TRUE) %>% filter(mae == min(mae)) %>% pull(E) 
+
+        bestE <- simplex(input[, pred_col], E = 1:10, lib = lib_inds,
+      pred = lib_inds, silent = TRUE) %>% mutate(mae = as.numeric(mae)) %>% filter(mae == min(mae)) %>% pull(E) 
   }
 
   if(is.na(besttheta)){
     besttheta <- s_map(input[, pred_col], E = bestE, 
       theta = seq(0, 10, .5), lib = lib_inds,
-      pred = lib_inds, silent = TRUE) %>% filter(mae == min(mae)) %>% pull(theta) 
+      pred = lib_inds, silent = TRUE) %>%  mutate(mae = as.numeric(mae)) %>% filter(mae == min(mae)) %>% pull(theta) 
   }
 
   #Construct block with lagged prediction column and other age classes
 if(bestE == 0) return('stop')
-
   block <- make_block(input[, pred_col], max_lag = bestE)
   temp <- cbind(input[, -which(names(input) == pred_col)], 
     block %>% select(-time))
@@ -440,6 +441,7 @@ predict_from_group <- function(groups, pred_col1, yr_vec = 1990:2019, ...){
 
 #Specify groups and predcol and process results
 multiple_pred_group <- function(in_group, in_col, ...){
+  
   rr <- lapply(in_col, FUN = function(ii){
     temp <- predict_from_group(groups = in_group, pred_col1 = ii, ...)  
     print(ii)

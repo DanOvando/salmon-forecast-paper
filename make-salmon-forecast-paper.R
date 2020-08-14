@@ -10,7 +10,7 @@ functions <- list.files(here::here("functions"))
 
 purrr::walk(functions, ~ source(here::here("functions", .x)))
 
-prep_run(results_name = "v0.5.2", results_description = "draft publication with boost tree improvements loo starting in 1990",
+prep_run(results_name = "v0.5.3", results_description = "draft publication with boost tree improvements loo starting in 1990",
          first_year = 1990, 
          last_year = 2019,
          min_year = 1963, 
@@ -18,14 +18,15 @@ prep_run(results_name = "v0.5.2", results_description = "draft publication with 
 
 options(dplyr.summarise.inform = FALSE)
 
-run_edm_forecast <- FALSE
+run_edm_forecast <- TRUE
 
-run_dlm_forecast <- FALSE
+run_dlm_forecast <- TRUE
 
-run_ml_forecast <- FALSE
+run_ml_forecast <- TRUE
 
-fit_statistical_ensemble <- FALSE
+fit_statistical_ensemble <- TRUE
 
+run_importance <- TRUE
 
 scalar <- 1000
 
@@ -893,6 +894,14 @@ return_plot <-   (total_return_plot / system_return_plot / age_return_plot)
 return_plot
 
 
+bb_img <- here("imgs", "bbay.png") %>%
+  image_read() 
+
+bb_plot <- ggdraw() + 
+  draw_image(bb_img)
+
+
+return_plot <- bb_plot + return_plot
 
 age_system_return_plot <- salmon_data %>% 
   filter(system %in% top_systems) %>% 
@@ -964,8 +973,8 @@ system_forecast_figure <- top_system_forecast %>%
   geom_area(aes(year, observed), fill = "darkgray") + 
   geom_point(aes(year, forecast, fill = model, alpha = mase), shape = 21, size = 3) +
   facet_wrap(~system, scales = "free_y") + 
-  fishualize::scale_fill_fish_d(option = "Trimma_lantana") + 
-  fishualize::scale_color_fish_d(option = "Trimma_lantana") + 
+  fishualize::scale_fill_fish_d(name = '',option = "Trimma_lantana") + 
+  fishualize::scale_color_fish_d(name = '',option = "Trimma_lantana") + 
   scale_alpha_continuous(range = c(1,0.25), name = "MASE") +
   scale_x_continuous(name = '') + 
   scale_y_continuous(expand = expansion(c(0,.05)), name = "Returns (Millions of Salmon)")
@@ -985,13 +994,6 @@ top_models <- age_performance %>%
 top_age_forecast <- age_forecast %>% 
   mutate(combo = paste(age_group, model, sep = "_")) %>% 
   filter(combo %in% top_models$combo)
-
-age_forecast_figure <- top_age_forecast %>% 
-  ggplot() + 
-  geom_area(aes(year, observed)) + 
-  geom_line(aes(year, forecast, color = model)) +
-  geom_point(aes(year, forecast, fill = model), shape = 21, size = 4) +
-  facet_wrap(~age_group, scales = "free_y")
 
 next_best <- age_performance %>% 
   filter(!model %in% c('boost_tree_ensemble','fri')) %>%
@@ -1015,8 +1017,8 @@ age_forecast_figure <- top_age_forecast %>%
   geom_area(aes(year, observed), fill = "darkgray") + 
   geom_point(aes(year, forecast, fill = model, alpha = mase), shape = 21, size = 3) +
   facet_wrap(~age_group, scales = "free_y") + 
-  fishualize::scale_fill_fish_d(option = "Trimma_lantana") + 
-  fishualize::scale_color_fish_d(option = "Trimma_lantana") + 
+  fishualize::scale_fill_fish_d(name = '', option = "Trimma_lantana") + 
+  fishualize::scale_color_fish_d(name = '',option = "Trimma_lantana") + 
   scale_alpha_continuous(range = c(1,0.25), labels = percent, name = "MASE") + 
   scale_y_continuous(expand = expansion(c(0,.05)), name = "Returns (Millions of Salmon)") + 
   scale_x_continuous(name = '')
@@ -1098,14 +1100,14 @@ top_ensemble_system_forecast <- system_forecast %>%
 system_ensemble_forecast_figure <- top_ensemble_system_forecast %>% 
   ggplot() + 
   geom_area(aes(year, observed), fill = "darkgray") + 
-  geom_point(aes(year, forecast, shape = model, fill = ens_improvement), size = 3) +
+  geom_point(aes(year, forecast, shape = model, fill = ens_improvement), size = 4, alpha = 0.95) +
   scale_fill_gradient2(low = "tomato", high = "steelblue", mid = "white", midpoint = 0,labels = label_percent(accuracy = 1),
                        guide = guide_colorbar(frame.colour = "black", ticks.colour = "black"),
                        name = "% Ensemble Improvement") +
   # fishualize::scale_fill_fish_d(option = "Trimma_lantana") + 
   # fishualize::scale_color_fish_d(option = "Trimma_lantana") + 
   # scale_alpha_continuous(range = c(1,0.25), name = "MASE") +
-  scale_shape_manual(values = c(23,21), name = '') +
+  scale_shape_manual(values = c(24,21), name = '') +
   scale_x_continuous(name = '') + 
   scale_y_continuous(expand = expansion(c(0,.05)), name = "Returns (Millions of Salmon)") + 
   theme(legend.direction = "horizontal", 
@@ -1309,46 +1311,40 @@ system_mase %>%
   write_csv(path = file.path(results_dir,"river_mase_rmse.csv"))
 
 
-system_forecast$resids <-
-  system_forecast$observed - system_forecast$forecast
+system_forecast <-  system_forecast %>% 
+  mutate(resids = forecast - observed) %>% 
+  group_by(system, model) %>% 
+  mutate(scaled_resid = scale(resids)) %>% 
+  ungroup() %>% 
+  group_by(system, year) %>% 
+  mutate(all_bad = all(abs(scaled_resid) > 1)) %>% 
+  ungroup()
 
-system_resid_plot <- system_forecast %>% filter(year >= 2000) %>%
-  ggplot() + geom_hline(yintercept = 0) +
-  geom_line(aes(
-    x = year,
-    y = resids,
-    group = model,
-    colour = model
-  ),
-  alpha = .75) + ylab("Residuals") +
-  facet_wrap( ~ system, scales = "free_y") +
-  theme(legend.position = c(.75, .15))
 
-  
   #Which years were predictable?
   
 # number of models with MASE < 1 by year
 
-
 # system residuals --------------------------------------------------------
 
 yearly_system_resid_struggles_figure <- system_forecast %>% 
-  mutate(resids = forecast - observed) %>% 
   filter(!model %in% c("boost_tree_ensemble","fri")) %>% 
-  ggplot(aes(year, resids, color = model)) + 
+  ggplot() + 
+  geom_ribbon(aes(year, ymin = 1, ymax = 4), fill = "tomato", alpha = 0.5) +
+  geom_ribbon(aes(year, ymin = -4, ymax = -1), fill = "tomato", alpha = 0.5) +
   geom_hline(aes(yintercept = 0)) +
-  geom_line() + 
-  facet_wrap(~system, scales = "free_y") + 
+  geom_line(aes(year, scaled_resid, color = model)) + 
+  facet_wrap(~system) + 
   # scale_color_simpsons(name = '') +
   # fishualize::scale_color_fish_d(option = "Trimma_lantana", name = '') + 
   theme(legend.position = c(0.7, .15), 
         legend.direction = "horizontal") + 
   scale_x_continuous(name = "") + 
-  scale_y_continuous(name = "Residuals (millions of fish)")
+  scale_y_continuous(name = "Standardized Residuals", limits = c(-4,4)) + 
+  scale_color_discrete(name = '')
 
 yearly_system_resid_struggles_figure
 # other struggles ---------------------------------------------------------
-
 
 
 yearly_struggles <- total_forecast %>%
@@ -1477,7 +1473,6 @@ yearly_age_struggles_figure <- yearly_age_struggles %>%
 
 # VOI plot ----------------------------------------------------------------
 
-    run_importance <- FALSE
     
     if (file.exists(file.path(results_dir, "next_forecast.rds"))){
       
