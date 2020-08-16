@@ -546,8 +546,7 @@ looframe <-
 future::plan(future::multiprocess, workers = cores)
 
 if (fit_parsnip_models == TRUE){
-  
-  
+
         a <- Sys.time()
         set.seed(42)
         loo_preds <- looframe %>%
@@ -576,7 +575,7 @@ if (fit_parsnip_models == TRUE){
             freshwater_cohort = freshwater_cohort,
             weight = weight_returns,
             trees = trees,
-            initial_prop = 0.8,
+            initial_prop = 0.75,
             forecast = FALSE,
             .progress = TRUE
           ))
@@ -795,9 +794,9 @@ write_rds(rnn_loo_preds, file.path(results_dir, "rnn_loo_preds.rds"))
 
 } else{
   
-  rnn_loo_preds <-
-    read_rds(file.path(results_dir, "rnn_loo_preds.rds"))
-  
+  # rnn_loo_preds <-
+  #   read_rds(file.path(results_dir, "rnn_loo_preds.rds"))
+  # 
 }
 
 
@@ -812,55 +811,55 @@ write_rds(rnn_loo_preds, file.path(results_dir, "rnn_loo_preds.rds"))
 
 
 
-rolp <- rnn_loo_preds
-
-rnn_loo_results <- rnn_loo_preds %>%
-  select(-prepped_data, -fit) %>% 
-  unnest(cols = predictions) %>% 
-  mutate(pred = pmax(pred * scalar, 0),
-         ret = ret * scalar) %>% 
-  filter(ret_yr == test_year)
-
-  
-rnn_loo_results %>%
-  ggplot(aes(ret, pred, color = data_use)) +
-  geom_point() +
-  geom_abline(aes(slope = 1, intercept = 0))
-
-rnn_age_loo_results <- rnn_loo_results %>% 
-  group_by(ret_yr, dep_age,data_use) %>% 
-  summarise(observed = sum(ret),
-            predicted = sum(pred))
-
-rnn_sys_loo_results <- rnn_loo_results %>% 
-  group_by(ret_yr,system,data_use) %>% 
-  summarise(observed = sum(ret),
-            predicted = sum(pred))
-
-rnn_total_loo_results <- rnn_loo_results %>% 
-  group_by(ret_yr,data_use) %>% 
-  summarise(observed = sum(ret),
-            predicted = sum(pred))
-
-rnn_age_sys_loo_results <- rnn_loo_results %>%
-  group_by(ret_yr, system, dep_age, data_use) %>%
-  summarise(observed = sum(ret),
-            predicted = sum(pred))
-
-
-rnn_loo_results <- rnn_loo_results %>% 
-  separate(age_group,c("fwa","oa"), sep =  "\\." , convert = TRUE, remove = TRUE) %>% 
-  mutate(age_group = paste(fwa, oa, sep = "_")) %>% 
-  rename(return_year = ret_yr,
-         observed_returns = ret,
-         predicted_returns = pred) %>% 
-  mutate(age = fwa + oa + 1) %>% 
-  mutate(brood_year = return_year - age) %>% 
-  mutate(model = "rnn") %>% 
-  select(model, brood_year, return_year, system, age_group, observed_returns, predicted_returns)
-
-write_csv(rnn_loo_results, path = file.path(results_dir,"rnn_loo_results.csv"))
-
+# rolp <- rnn_loo_preds
+# 
+# rnn_loo_results <- rnn_loo_preds %>%
+#   select(-prepped_data, -fit) %>% 
+#   unnest(cols = predictions) %>% 
+#   mutate(pred = pmax(pred * scalar, 0),
+#          ret = ret * scalar) %>% 
+#   filter(ret_yr == test_year)
+# 
+#   
+# rnn_loo_results %>%
+#   ggplot(aes(ret, pred, color = data_use)) +
+#   geom_point() +
+#   geom_abline(aes(slope = 1, intercept = 0))
+# 
+# rnn_age_loo_results <- rnn_loo_results %>% 
+#   group_by(ret_yr, dep_age,data_use) %>% 
+#   summarise(observed = sum(ret),
+#             predicted = sum(pred))
+# 
+# rnn_sys_loo_results <- rnn_loo_results %>% 
+#   group_by(ret_yr,system,data_use) %>% 
+#   summarise(observed = sum(ret),
+#             predicted = sum(pred))
+# 
+# rnn_total_loo_results <- rnn_loo_results %>% 
+#   group_by(ret_yr,data_use) %>% 
+#   summarise(observed = sum(ret),
+#             predicted = sum(pred))
+# 
+# rnn_age_sys_loo_results <- rnn_loo_results %>%
+#   group_by(ret_yr, system, dep_age, data_use) %>%
+#   summarise(observed = sum(ret),
+#             predicted = sum(pred))
+# 
+# 
+# rnn_loo_results <- rnn_loo_results %>% 
+#   separate(age_group,c("fwa","oa"), sep =  "\\." , convert = TRUE, remove = TRUE) %>% 
+#   mutate(age_group = paste(fwa, oa, sep = "_")) %>% 
+#   rename(return_year = ret_yr,
+#          observed_returns = ret,
+#          predicted_returns = pred) %>% 
+#   mutate(age = fwa + oa + 1) %>% 
+#   mutate(brood_year = return_year - age) %>% 
+#   mutate(model = "rnn") %>% 
+#   select(model, brood_year, return_year, system, age_group, observed_returns, predicted_returns)
+# 
+# write_csv(rnn_loo_results, path = file.path(results_dir,"rnn_loo_results.csv"))
+# 
 
 
 # proces parsnip models ---------------------------------------------------
@@ -907,7 +906,7 @@ total_loo_results <- loo_results %>%
             predicted = sum(pred))
 
 age_sys_loo_results <- loo_results %>% 
-  group_by(ret_yr,system, dep_age, model_type,!!!run_ids) %>% 
+  group_by(ret_yr,system, dep_age,!!!run_ids) %>% 
   summarise(observed = sum(ret),
             predicted = sum(pred))
 
