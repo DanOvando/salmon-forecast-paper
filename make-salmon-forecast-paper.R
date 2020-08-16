@@ -18,9 +18,9 @@ prep_run(results_name = "v0.5.3", results_description = "draft publication with 
 
 options(dplyr.summarise.inform = FALSE)
 
-run_edm_forecast <- TRUE
+run_edm_forecast <- FALSE
 
-run_dlm_forecast <- TRUE
+run_dlm_forecast <- FALSE
 
 run_ml_forecast <- TRUE
 
@@ -241,11 +241,19 @@ if (fit_statistical_ensemble){
     
     ensemble_splits <- rsample::group_vfold_cv(training_ensemble_data, group = year)
     
-    tune_grid <- parameters(min_n(range(2,10)), tree_depth(range(4,15)), learn_rate(range = c(-2,0)), mtry(),
-                            loss_reduction(),sample_prop(range = c(0.5,1)), trees(range = c(500,2000)))%>% 
+    tune_grid <-
+      parameters(
+        min_n(range(1, 10)),
+        tree_depth(range(2, 15)),
+        learn_rate(range = c(log10(.05), log10(.6))),
+        mtry(),
+        loss_reduction(),
+        sample_prop(range = c(1, 1)),
+        trees(range = c(500, 2000))
+      ) %>%
       dials::finalize(mtry(), x = training_ensemble_data %>% select(-(1:2)))
     
-    xgboost_grid <- grid_max_entropy(tune_grid, size = 20) 
+    xgboost_grid <- grid_latin_hypercube(tune_grid, size = 50) 
     
     xgboost_model <-
       parsnip::boost_tree(
@@ -1647,9 +1655,16 @@ yearly_age_struggles_figure <- yearly_age_struggles %>%
 # save things -------------------------------------------------------------
 
 
-
+performance <- ls()[str_detect(ls(), "_performance$")]
+    
+forecasts <- ls()[str_detect(ls(), "_forecast$") & !str_detect(ls(), "run_") & !str_detect(ls(), "next_forecast")]
+        
 plots <- ls()[str_detect(ls(), "(_plot)|(_figure)")]
     
+save(list = performance, file = file.path(results_dir, "performance.RData"))
+
+save(list = forecasts, file = file.path(results_dir, "forecasts.RData"))
+
 save(list = plots, file = file.path(results_dir, "plots.RData"))
 
 fig_path <- file.path(results_dir,"figs")

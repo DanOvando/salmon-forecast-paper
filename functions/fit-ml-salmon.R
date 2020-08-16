@@ -111,7 +111,7 @@ fit_ml_salmon <- function(dep_age,
   } else {
     long_cohorts <- cohorts %>%
       group_by(brood_yr, ret_yr, system) %>%
-      summarise(cohort_returns = sum(ret)) %>%
+      summarise(cohort_returns = sum(ret, na.rm = TRUE)) %>%
       ungroup() %>%
       mutate(ret_yr = ret_yr + 1)
     
@@ -152,23 +152,23 @@ fit_ml_salmon <- function(dep_age,
   #   corrr::rplot()
   
   # the trends in the age group of interest
-  age_groups <- data %>%
-    group_by(age_group, ret_yr, system) %>%
-    summarise(cohort_returns = sum(ret)) %>%
-    ungroup() %>%
-    group_by(age_group, system) %>%
-    arrange(ret_yr) %>%
-    mutate(
-      lag_returns = lag(cohort_returns, 1),
-      rolling_mean = RcppRoll::roll_mean(
-        cohort_returns,
-        n = 4,
-        align = 'right',
-        fill = NA
-      )
-    ) %>%
-    mutate(ret_yr = ret_yr + 1) # lagging the returns to join to the dependent data
-  
+  # age_groups <- data %>%
+  #   group_by(age_group, ret_yr, system) %>%
+  #   summarise(cohort_returns = sum(ret)) %>%
+  #   ungroup() %>%
+  #   group_by(age_group, system) %>%
+  #   arrange(ret_yr) %>%
+  #   mutate(
+  #     lag_returns = lag(cohort_returns, 1),
+  #     rolling_mean = RcppRoll::roll_mean(
+  #       cohort_returns,
+  #       n = 4,
+  #       align = 'right',
+  #       fill = NA
+  #     )
+  #   ) %>%
+  #   mutate(ret_yr = ret_yr + 1) # lagging the returns to join to the dependent data
+  # 
   
   age_groups <- data %>%
     group_by(age_group, ret_yr, system) %>%
@@ -312,8 +312,7 @@ fit_ml_salmon <- function(dep_age,
   #                                    hjust = 1))
   salmon_train <- salmon_data %>%
     filter(ret_yr < test_year)
-  
-  
+
   
   # salmon_recipe <- recipe(ret ~ ., data = salmon_train) %>%
   #   step_center(contains("env_")) %>%
@@ -426,7 +425,7 @@ fit_ml_salmon <- function(dep_age,
     tune_grid <- parameters(min_n(),mtry(), trees())  %>% 
       dials::finalize(mtry(), x = baked_salmon %>% select(-(1:2)))
     
-    ranger_grid <- grid_max_entropy(tune_grid, size = 10) %>% 
+    ranger_grid <- grid_latin_hypercube(tune_grid, size = 30) %>% 
       mutate(grid_row = 1:nrow(.))
     
     tune_grid <- tidyr::expand_grid(grid_row = 1:nrow(ranger_grid), id = unique(salmon_rolling_origin$id)) %>% 
@@ -461,14 +460,21 @@ fit_ml_salmon <- function(dep_age,
     #   set_mode("classification")
     # 
     
-    tune_grid <- parameters(min_n(range(2,10)), tree_depth(range(4,15)), learn_rate(range = c(-2,0)), mtry(),
-                            loss_reduction(),sample_size(range = c(1,1)), trees(range = c(500,2000)))%>% 
+    tune_grid <-
+      parameters(
+        min_n(range(2, 10)),
+        tree_depth(range(2, 15)),
+        learn_rate(c(log10(.05),log10(.6))),
+        mtry(),
+        loss_reduction(),
+        sample_size(range = c(1, 1)),
+        trees(range = c(500, 2000))
+      ) %>%
       dials::finalize(mtry(), x = baked_salmon %>% select(-(1:2)))
     
-    xgboost_grid <- grid_max_entropy(tune_grid, size = 30) %>% 
-      mutate(grid_row = 1:nrow(.)) %>% 
-      mutate(trees = trees)
-    
+    xgboost_grid <- grid_latin_hypercube(tune_grid, size = 30) %>% 
+      mutate(grid_row = 1:nrow(.)) #%>% 
+      # mutate(trees = trees)
     tune_grid <- tidyr::expand_grid(grid_row = 1:nrow(xgboost_grid), id = unique(salmon_rolling_origin$id)) %>% 
       left_join(xgboost_grid, by = "grid_row") %>% 
       left_join(salmon_rolling_origin, by = "id")
@@ -512,10 +518,11 @@ fit_ml_salmon <- function(dep_age,
   # browser()
   tune_vars <-
     colnames(best_params)[!colnames(best_params) %in% c(".pred", "observed","id","grid_row")]
-  
+ 
   best_params <- best_params %>%
-    group_by(!!!rlang::parse_exprs(tune_vars)) %>%
-    yardstick::rmse(observed, .pred) %>%
+    group_by(across({{tune_vars}})) %>%
+    yardstick::mae(observed, .pred) %>%
+    # yardstick::rmse(observed, .pred) %>%
     ungroup()
 
   # a = best_params %>%
@@ -550,10 +557,10 @@ fit_ml_salmon <- function(dep_age,
   #   facet_wrap(~min_n)
   # browser()
   # best_params %>%
-  #   ggplot(aes(mtry, .estimate, color = (trees))) +
+  #   ggplot(aes(trees, .estimate, color = (learn_rate))) +
   #   geom_point() +
-  #   facet_grid(tree_depth~learn_rate)
-  
+  #   facet_wrap(~tree_depth)
+  # 
   best <- best_params %>%
     filter(.estimate == min(.estimate)) %>%
     dplyr::slice(1)
@@ -715,9 +722,11 @@ fit_ml_salmon <- function(dep_age,
   #   ggplot(aes(ret, pred, color = factor(ret_yr))) +
   #   geom_abline(aes(intercept = 0, slope = 1)) +
   #   geom_smooth(method = "lm", show.legend = FALSE, se = FALSE) +
-  #   geom_point(show.legend = TRUE) +
+  #   geom_point(show.legend = FALSE) +
   #   facet_wrap(~split, scales = "free") +
-  #   scale_color_viridis_d()
+  #   scale_color_viridis_d() +
+  #   scale_x_continuous(limits = c(0, NA)) +
+  #   scale_y_continuous(limits = c(0, NA))
   
   if (produce == "summary") {
     out <- list(salmon_data = salmon_data, best_params = best_params)
