@@ -10,7 +10,7 @@ functions <- list.files(here::here("functions"))
 
 purrr::walk(functions, ~ source(here::here("functions", .x)))
 
-prep_run(results_name = "v0.5.3", results_description = "draft publication with boost tree improvements loo starting in 1990",
+prep_run(results_name = "v0.5.4", results_description = "draft publication with boost tree improvements loo starting in 1990",
          first_year = 1990, 
          last_year = 2019,
          min_year = 1963, 
@@ -22,7 +22,7 @@ run_edm_forecast <- FALSE
 
 run_dlm_forecast <- FALSE
 
-run_ml_forecast <- TRUE
+run_ml_forecast <- FALSE
 
 fit_statistical_ensemble <- TRUE
 
@@ -226,10 +226,11 @@ ensemble_data[is.na(ensemble_data)] <- -999
 ensemble_data <- ensemble_data %>% 
   arrange(year)
 
-
 if (fit_statistical_ensemble){
   
   fit_ensemble <- function(test_year, ensemble_data){
+    
+    message(glue::glue("fitting ensemble through {test_year}"))
     
     training_prop <- last(which(ensemble_data$year < test_year)) / nrow(ensemble_data)
     
@@ -253,7 +254,7 @@ if (fit_statistical_ensemble){
       ) %>%
       dials::finalize(mtry(), x = training_ensemble_data %>% select(-(1:2)))
     
-    xgboost_grid <- grid_latin_hypercube(tune_grid, size = 50) 
+    xgboost_grid <- grid_latin_hypercube(tune_grid, size = 20) 
     
     xgboost_model <-
       parsnip::boost_tree(
@@ -279,13 +280,6 @@ if (fit_statistical_ensemble){
     
     set.seed(234)
     doParallel::registerDoParallel(cores = parallel::detectCores() - 2)
-    # ranger_tuning <- tune_grid(
-    #   ranger_workflow,
-    #   resamples = ensemble_splits,
-    #   grid = ranger_grid,
-    #   control = control_grid(save_pred = TRUE)
-    # )
-    # ranger_tuning
 
     xgboost_tuning <- tune_grid(
       xgboost_workflow,
@@ -294,26 +288,7 @@ if (fit_statistical_ensemble){
       control = control_grid(save_pred = TRUE)
     )
     
-    # xgboost_tuning
-    
-    # collect_metrics(ranger_tuning) %>% 
-    #   select(mean, mtry:min_n, .metric) %>% 
-    #   pivot_longer(mtry:min_n, names_to = "dial", values_to = "level") %>% 
-    #   ggplot(aes(level, mean)) + 
-    #   geom_point() + 
-    #   facet_wrap(.metric ~ dial, scales = "free")
-    
-    # collect_metrics(xgboost_tuning) %>%
-    #   select(mean, mtry:sample_size, .metric) %>%
-    #   pivot_longer(mtry:sample_size, names_to = "dial", values_to = "level") %>%
-    #   ggplot(aes(level, mean)) +
-    #   geom_point() +
-    #   facet_wrap(.metric ~ dial, scales = "free")
-    # 
-    # show_best(xgboost_tuning, "rmse")
-    # 
-    
-    best_rmse <- tune::select_best(xgboost_tuning, metric = "rmse")
+    best_vals <- tune::select_best(xgboost_tuning, metric = "rmse")
     
     # final_ranger_model <- finalize_workflow(
     #   ranger_workflow,
@@ -322,19 +297,19 @@ if (fit_statistical_ensemble){
     
     final_workflow <- finalize_workflow(
       xgboost_workflow,
-      best_rmse
+      best_vals
     )
     
     trained_ensemble <-
       parsnip::boost_tree(
         mode = "regression",
-        mtry = best_rmse$mtry,
-        min_n = best_rmse$min_n,
-        loss_reduction = best_rmse$loss_reduction,
-        sample_size = best_rmse$sample_size, 
-        learn_rate = best_rmse$learn_rate,
-        tree_depth = best_rmse$tree_depth,
-        trees = best_rmse$trees
+        mtry = best_vals$mtry,
+        min_n = best_vals$min_n,
+        loss_reduction = best_vals$loss_reduction,
+        sample_size = best_vals$sample_size, 
+        learn_rate = best_vals$learn_rate,
+        tree_depth = best_vals$tree_depth,
+        trees = best_vals$trees
       ) %>%
       parsnip::set_engine("xgboost") %>%
       parsnip::fit(observed ~ ., data = training_ensemble_data)
@@ -528,6 +503,9 @@ age_system_performance <- age_system_forecast %>%
             mae = yardstick::mae_vec(truth = observed, estimate = forecast),
             mase = mase_foo(observed = observed, forecast = forecast, lag_mae = lag_mae),
             bias = mean(forecast - observed)) %>% 
+  ungroup() %>% 
+  group_by(age_group, system) %>% 
+  mutate(srmse = rmse / rmse[model == "lag"]) %>% 
   ungroup()
 
 
@@ -544,7 +522,9 @@ total_performance <- total_forecast %>%
             mase = mase_foo(observed = observed, forecast = forecast, lag_mae = lag_mae),
             bias = mean(forecast - observed)) %>% 
   ungroup() %>% 
-  arrange(mase)
+  arrange(mase) %>% 
+  mutate(srmse = rmse / rmse[model == "lag"]) %>% 
+  ungroup()
 
 system_performance <- system_forecast %>% 
   group_by(system) %>% 
@@ -556,7 +536,11 @@ system_performance <- system_forecast %>%
             mase = mase_foo(observed = observed, forecast = forecast, lag_mae = lag_mae),
             bias = mean(forecast - observed)) %>% 
   ungroup() %>% 
-  arrange(mase)
+  arrange(mase) %>% 
+  group_by(system) %>% 
+  mutate(srmse = rmse / rmse[model == "lag"]) %>% 
+  ungroup()
+
 
 age_performance <- age_forecast %>% 
   group_by(age_group) %>% 
@@ -570,7 +554,10 @@ age_performance <- age_forecast %>%
             mase = mase_foo(observed = observed, forecast = forecast, lag_mae = lag_mae),
             bias = mean(forecast - observed)) %>% 
   ungroup() %>% 
-  arrange(mase)
+  arrange(mase) %>% 
+  group_by(age_group) %>% 
+  mutate(srmse = rmse / rmse[model == "lag"]) %>% 
+  ungroup()
 
 
 total_performance_plot <- total_performance %>% 
@@ -631,9 +618,6 @@ save(list = performance_files,file = file.path(results_dir,"performance_files.Rd
 
 
 
-
-# make plots --------------------------------------------------------------
-
 salmon_data <- data %>% 
   rename(year = ret_yr) %>% 
   mutate(age_group = str_replace(age_group,"\\.","_"))
@@ -646,33 +630,6 @@ salmon_data <- salmon_data %>%
   filter(age_group %in% top_age_groups) %>% 
   mutate(ret = ret/ 1000)
 
-## ----age-sys-return-plot------------------------------------------------------
-
-age_sys_return_plot <- salmon_data %>% 
-  ggplot(aes(year, ret, fill = age_group)) + 
-  geom_col(alpha = 0.75) + 
-  facet_wrap(~system, scales = "free_y") + 
-  scale_fill_viridis_d(name = "Age Group") + 
-  scale_y_continuous(name = "Returns (Millions of Salmon)") + 
-  scale_x_continuous(name = '') +
-  theme(legend.position = "top") 
-
-age_sys_return_plot
-
-
-## ----ml-pred-plot-------------------------------------------------------------
-
-ml_pred_plot <- total_forecast %>% 
-  filter(model == "boost_tree") %>% 
-  ggplot() + 
-  geom_col(aes(year, observed),alpha = 0.75) + 
-  geom_line(aes(year, forecast),color = "tomato", linetype = 2) +
-  geom_point(aes(year, forecast),fill = "tomato", size = 4, shape = 21) +
-  scale_y_continuous(name = "Returns (millions)") + 
-  scale_x_continuous(name = '')  + 
-  labs(caption = "Red points are forecasts")
-
-ml_pred_plot
 
 
 
@@ -719,23 +676,13 @@ all_age_pred_plot
 naive_ensemble <- age_system_performance %>%
   filter(model != "fri") %>% 
   group_by(age_group, system) %>%
-  filter(mase == min(mase, na.rm = TRUE)) %>%
+  filter(srmse == min(srmse, na.rm = TRUE)) %>%
   select(age_group, system, model) %>%
   rename(best_model = model)
 
 naive_ensemble_forecasts <- forecasts %>%
   left_join(naive_ensemble, by = c("age_group", "system")) %>%
   filter(model == best_model) 
-
-forecasts %>% 
-  filter(year > 2010) %>% 
-  group_by(year,model) %>% 
-  summarise(r = sum(observed)) %>% 
-  ggplot(aes(year, r, color= model)) + 
-  geom_line() + 
-  geom_vline(aes(xintercept = 2019)) +
-  facet_wrap(~model)
-
 
 
 naive_ensemble_forecasts_plot <- naive_ensemble_forecasts %>%
@@ -755,7 +702,6 @@ naive_ensemble_forecasts_plot <- naive_ensemble_forecasts %>%
 naive_ensemble_forecasts_plot
 
 
-
 ## ----include=TRUE-------------------------------------------------------------
 system_naive_ensemble_forecasts_plot <-  naive_ensemble_forecasts %>%
   group_by(year, system) %>%
@@ -773,45 +719,6 @@ system_naive_ensemble_forecasts_plot <-  naive_ensemble_forecasts %>%
   labs(caption = "Red points are naive-ensemble based forecasts")
 
 system_naive_ensemble_forecasts_plot
-
-
-
-## -----------------------------------------------------------------------------
-
-
-total_performance %>%
-  arrange(mase) %>% 
-  gt() %>%
-  fmt_number(columns = which(colnames(.) != "model"),
-             decimals = 1)
-
-
-
-## -----------------------------------------------------------------------------
-
-
-age_performance %>%
-  # filter(model %in% c("fri","ml")) %>% 
-  group_by(age_group) %>% 
-  arrange(mase) %>% 
-  gt() %>%
-  fmt_number(columns = which(map_lgl(., is.numeric)),
-             decimals = 2)
-
-
-
-## -----------------------------------------------------------------------------
-
-
-system_performance %>%
-  # filter(model %in% c("fri","ml")) %>% 
-  group_by(system) %>% 
-  arrange(mase) %>% 
-  gt() %>%
-  fmt_number(columns = 2:7,
-             decimals = 1)
-
-  
 
 
 # figure 1 ----------------------------------------------------------------
@@ -876,28 +783,6 @@ age_return_plot <- salmon_data %>%
 
 age_return_plot
 
-# 
-# dd <- data.frame(x=LETTERS[1:3], y=1:3)
-# pie <- ggplot(dd, aes(x=1, y, fill=x)) + geom_bar(stat="identity", width=1) + coord_polar(theta="y") +
-#   theme_void() + theme(legend.position="none") + theme_transparent()
-
-# df <- tibble(x = sample(2:9),
-#              y = sample(2:9),
-#              width = sample(seq(0.5, 3, length.out=length(x))),
-#              pie = list(pie))
-# 
-# 
-# p <- ggplot(data=data.frame(x=c(0, 10), y=c(0, 10)), aes(x, y))+geom_blank()
-# p + geom_subview(aes(x=x, y=y, subview=pie, width=width, height=width), data=df)
-
-
-# df <- tibble(x = 180,
-#              y = 55,
-#              width = sample(seq(0.5, 3, length.out=length(x))),
-#              pie = list(pie))
-# 
-# bristol_bay_plot + geom_subview(aes(x=x, y=y, subview=pie, width=width, height=width), data=df)
-
 return_plot <-   (total_return_plot / system_return_plot / age_return_plot)
 return_plot
 
@@ -953,21 +838,29 @@ age_system_return_plot
 
 pal <- pnw_palette("Winter",n = n_distinct(system_performance$model))
 
+# nush <- system_performance %>% 
+#   filter(system == "Nushagak")
+# 
+# nush %>% 
+#   ggplot(aes(mae, rmse, color = model)) + 
+#   geom_abline(slope = 1, intercept = 0) +
+#   geom_point()
+
 top_models <- system_performance %>% 
   group_by(system) %>% 
   filter(!model %in% c('boost_tree_ensemble','fri')) %>%
-  filter(mase == min(mase)) %>% 
+  filter(srmse == min(srmse)) %>% 
   mutate(combo = paste(system, model, sep = "_"))
 
 next_best <- system_performance %>% 
   filter(!model %in% c('boost_tree_ensemble','fri')) %>%
   group_by(system) %>% 
-  mutate(model_rank = rank(mase)) %>% 
+  mutate(model_rank = rank(srmse)) %>% 
   filter(model_rank < 3) %>% 
   arrange(system)  %>% 
   summarise(model = model[model_rank == 1],
-            percent_improvement = abs(mase[model_rank == 1] / mase[model_rank == 2] - 1),
-            mase = mase[model_rank == 1])
+            percent_improvement = abs(srmse[model_rank == 1] / srmse[model_rank == 2] - 1),
+            srmse = srmse[model_rank == 1])
 
 
 top_system_forecast <- system_forecast %>% 
@@ -979,11 +872,11 @@ top_system_forecast <- system_forecast %>%
 system_forecast_figure <- top_system_forecast %>% 
   ggplot() + 
   geom_area(aes(year, observed), fill = "darkgray") + 
-  geom_point(aes(year, forecast, fill = model, alpha = mase), shape = 21, size = 3) +
+  geom_point(aes(year, forecast, fill = model, alpha = srmse), shape = 21, size = 3) +
   facet_wrap(~system, scales = "free_y") + 
   fishualize::scale_fill_fish_d(name = '',option = "Trimma_lantana") + 
   fishualize::scale_color_fish_d(name = '',option = "Trimma_lantana") + 
-  scale_alpha_continuous(range = c(1,0.25), name = "MASE") +
+  scale_alpha_continuous(range = c(1,0.25), name = "SRMSE") +
   scale_x_continuous(name = '') + 
   scale_y_continuous(expand = expansion(c(0,.05)), name = "Returns (Millions of Salmon)")
 
@@ -995,7 +888,7 @@ system_forecast_figure
 top_models <- age_performance %>% 
   filter(!model %in% c('boost_tree_ensemble','fri')) %>%
   group_by(age_group) %>% 
-  filter(mase == min(mase)) %>% 
+  filter(srmse == min(srmse)) %>% 
   mutate(combo = paste(age_group, model, sep = "_")) %>% 
   ungroup()
 
@@ -1006,12 +899,12 @@ top_age_forecast <- age_forecast %>%
 next_best <- age_performance %>% 
   filter(!model %in% c('boost_tree_ensemble','fri')) %>%
   group_by(age_group) %>% 
-  mutate(model_rank = rank(mase)) %>% 
+  mutate(model_rank = rank(srmse)) %>% 
   filter(model_rank < 3) %>% 
   arrange(age_group)  %>% 
   summarise(model = model[model_rank == 1],
-            percent_improvement = abs(mase[model_rank == 1] / mase[model_rank == 2] - 1),
-            mase = mase[model_rank == 1])
+            percent_improvement = abs(srmse[model_rank == 1] / srmse[model_rank == 2] - 1),
+            srmse = srmse[model_rank == 1])
 
 
 top_age_forecast <- age_forecast %>% 
@@ -1023,11 +916,11 @@ top_age_forecast <- age_forecast %>%
 age_forecast_figure <- top_age_forecast %>% 
   ggplot() + 
   geom_area(aes(year, observed), fill = "darkgray") + 
-  geom_point(aes(year, forecast, fill = model, alpha = mase), shape = 21, size = 3) +
+  geom_point(aes(year, forecast, fill = model, alpha = srmse), shape = 21, size = 3) +
   facet_wrap(~age_group, scales = "free_y") + 
   fishualize::scale_fill_fish_d(name = '', option = "Trimma_lantana") + 
   fishualize::scale_color_fish_d(name = '',option = "Trimma_lantana") + 
-  scale_alpha_continuous(range = c(1,0.25), labels = percent, name = "MASE") + 
+  scale_alpha_continuous(range = c(1,0.25), labels = percent, name = "SRMSE") + 
   scale_y_continuous(expand = expansion(c(0,.05)), name = "Returns (Millions of Salmon)") + 
   scale_x_continuous(name = '')
   
@@ -1039,17 +932,17 @@ age_forecast_figure
 
 top_models <- total_performance %>% 
   filter(!model %in% c('boost_tree_ensemble','fri')) %>%
-  filter(mase == min(mase)) %>% 
+  filter(srmse == min(srmse)) %>% 
   mutate(combo = paste(model, sep = "_")) %>% 
   ungroup()
 
 next_best <- total_performance %>% 
   filter(!model %in% c('boost_tree_ensemble','fri')) %>%
-  mutate(model_rank = rank(mase)) %>% 
+  mutate(model_rank = rank(srmse)) %>% 
   filter(model_rank < 3) %>% 
   summarise(model = model[model_rank == 1],
-            percent_improvement = abs(mase[model_rank == 1] / mase[model_rank == 2] - 1),
-            mase = mase[model_rank == 1])
+            percent_improvement = abs(srmse[model_rank == 1] / srmse[model_rank == 2] - 1),
+            srmse = srmse[model_rank == 1])
 
 
 top_total_forecast <- total_forecast %>% 
@@ -1061,10 +954,10 @@ top_total_forecast <- total_forecast %>%
 total_forecast_figure <- top_total_forecast %>% 
   ggplot() + 
   geom_area(aes(year, observed), fill = "darkgray") + 
-  geom_point(aes(year, forecast, fill = model, alpha = mase), shape = 21, size = 3) +
+  geom_point(aes(year, forecast, fill = model, alpha = srmse), shape = 21, size = 3) +
   fishualize::scale_fill_fish_d(option = "Trimma_lantana") + 
   fishualize::scale_color_fish_d(option = "Trimma_lantana") + 
-  scale_alpha_continuous(range = c(1,0.25), name = "MASE") + 
+  scale_alpha_continuous(range = c(1,0.25), name = "SRMSE") + 
   scale_y_continuous(expand = expansion(c(0,.05)), name = "Returns (Millions of Salmon)") + 
   scale_x_continuous(name = '') 
 
@@ -1081,9 +974,9 @@ pal <- pnw_palette("Winter",n = n_distinct(system_performance$model))
 top_ensemble <- system_performance %>% 
   group_by(system) %>% 
   filter(model %in% c('boost_tree_ensemble','fri')) %>%
-  filter(mase == min(mase)) %>% 
-  select(model, system, mase) %>% 
-  rename(ens_mase = mase) %>% 
+  filter(srmse == min(srmse)) %>% 
+  select(model, system, srmse) %>% 
+  rename(ens_srmse = srmse) %>% 
   ungroup() %>% 
   mutate(combo = paste(system, model, sep = "_"))
   
@@ -1091,13 +984,13 @@ top_ensemble <- system_performance %>%
 top_non_ensemble <- system_performance %>% 
   group_by(system) %>% 
   filter(!model %in% c('boost_tree_ensemble','fri')) %>%
-  filter(mase == min(mase)) %>% 
-  select(system, mase) %>%
+  filter(srmse == min(srmse)) %>% 
+  select(system, srmse) %>%
   ungroup()
   
 ensemble_performance <- top_ensemble %>% 
   left_join(top_non_ensemble, by = "system") %>% 
-  mutate(ens_improvement = 1 - ens_mase / mase)
+  mutate(ens_improvement = 1 - ens_srmse / srmse)
 
 
 top_ensemble_system_forecast <- system_forecast %>% 
@@ -1248,91 +1141,6 @@ age_concordance <- age_pre %>%
 
 
 
-# assess performance against lags -----------------------------------------
-
-#Calculate mase for 
-#Include lagged values
-forecasts <- forecasts %>%
-  group_by(model, system, age_group) %>%
-  arrange(year) %>% 
-  mutate(lag_observed = lag(observed)) 
-
-#Look at total returns (across age classes) by river
-system_forecast <- system_forecast %>% 
-  group_by(model, system) %>% 
-  arrange(year) %>% 
-  mutate(lag_observed = lag(observed)) 
-
-total_forecast <- total_forecast %>% 
-  group_by(model) %>% 
-  arrange(year) %>% 
-  mutate(lag_observed = lag(observed)) 
-
-
-age_forecast <- age_forecast %>% 
-  group_by(model, age_group) %>% 
-  arrange(year) %>% 
-  mutate(lag_observed = lag(observed)) 
-
-
-system_mase <-
-  system_forecast %>% filter(year >= 2000) %>% group_by(model, system) %>%
-  summarize(
-    mase_val = my_mase(observed, forecast, lag_observed),
-    rmse_val = yardstick::rmse_vec(observed, forecast)
-  )
-
-system_mase <-
-  system_mase %>% group_by(system) %>% arrange(rmse_val) %>%
-  mutate(rr = row_number())
-
-outs <- tibble(system = unique(system_mase$system))
-
-system_mase <- system_mase %>% 
-  group_by(system) %>% 
-  mutate(rmse_yy = (rmse_val - min(rmse_val)) / min(rmse_val))
-
-
-
-system_mase %>% 
-  ggplot(aes(x = rmse_val, y = mase_val)) + 
-  geom_point() + 
-  geom_hline(yintercept = 1, lty = 2) + 
-  facet_wrap(~ system) +
-  xlab("RMSE") + ylab("MASE")
-
-system_mase$rmse_val <- round(system_mase$rmse_val, digits = 0)
-
-system_mase$rmse_val2 <- system_mase$rmse_val
-
-system_mase[which(system_mase$mase_val >= 1),
-                'rmse_val2'] <- NA 
-
-nsigs <- system_mase %>% group_by(model) %>% 
-  mutate(nsigs = sum(mase_val < 1)) %>% distinct(model, nsigs) %>%
-  arrange(nsigs)
-
-system_mase %>%
-  arrange(model) %>% dcast(model ~ system, value.var = 'rmse_val2') %>%
-  left_join(nsigs, by = 'model') %>% arrange(desc(nsigs)) %>%
-  select(model,nsigs, everything()) %>%
-  write_csv(path = file.path(results_dir,"river_mase_rmse.csv"))
-
-
-system_forecast <-  system_forecast %>% 
-  mutate(resids = forecast - observed) %>% 
-  group_by(system, model) %>% 
-  mutate(scaled_resid = scale(resids)) %>% 
-  ungroup() %>% 
-  group_by(system, year) %>% 
-  mutate(all_bad = all(abs(scaled_resid) > 1)) %>% 
-  ungroup()
-
-
-  #Which years were predictable?
-  
-# number of models with MASE < 1 by year
-
 # system residuals --------------------------------------------------------
 
 yearly_system_resid_struggles_figure <- system_forecast %>% 
@@ -1352,135 +1160,8 @@ yearly_system_resid_struggles_figure <- system_forecast %>%
   scale_color_discrete(name = '')
 
 yearly_system_resid_struggles_figure
-# other struggles ---------------------------------------------------------
-
-
-yearly_struggles <- total_forecast %>%
-  filter(model != "lag", !is.na(lag_observed)) %>%
-  group_by(model, year) %>%
-  summarize(
-    mase_val = abs(observed - forecast) / abs(observed - lag_observed),
-    mape_val = yardstick::mape_vec(observed, forecast)
-  ) %>%
-  group_by(year) %>%
-  summarise(p_beat_lag = mean(mase_val < 1),
-            mean_mape = mean(mape_val))
-
-
-yearly_struggles_figure <- yearly_struggles %>%
-  ggplot(aes(year, mean_mape / 100, fill = p_beat_lag)) +
-  geom_hline(aes(yintercept = 0)) +
-  geom_col() + 
-  scale_y_continuous(labels = scales::label_percent(accuracy = 1), name = "Mean Absolute Percent Error",
-                     expand = c(0,NA)) + 
-  scale_x_continuous(name = '') +
-  scale_fill_viridis_c(labels = percent, name = "% Beating Lag")
-
-
-yearly_system_struggles <- system_forecast %>%
-  filter(model != "lag", !is.na(lag_observed)) %>%
-  group_by(model, year, system) %>%
-  summarize(
-    mase_val = abs(observed - forecast) / abs(observed - lag_observed),
-    mape_val = yardstick::mape_vec(observed, forecast)
-  ) %>%
-  group_by(year, system) %>%
-  summarise(p_beat_lag = mean(mase_val < 1),
-            mean_mape = mean(mape_val))
-
-
-yearly_system_struggles_figure <- yearly_system_struggles %>%
-  ggplot(aes(year, mean_mape / 100, fill = p_beat_lag)) +
-  geom_hline(aes(yintercept = 0)) +
-  geom_col() + 
-  scale_y_continuous(labels = scales::label_percent(accuracy = 1), name = "Mean Absolute Percent Error",
-                     expand = c(0,NA)) + 
-  scale_x_continuous(name = '') +
-  scale_fill_viridis_c(labels = percent, name = "% Beating Lag")+ 
-  facet_wrap(~system, scales = "free_y")
-
-
-yearly_age_struggles <- age_forecast %>%
-  filter(model != "lag", !is.na(lag_observed)) %>%
-  group_by(model, year, age_group) %>%
-  summarize(
-    mase_val = abs(observed - forecast) / abs(observed - lag_observed),
-    mape_val = yardstick::mape_vec(observed, forecast)
-  ) %>%
-  group_by(year, age_group) %>%
-  summarise(p_beat_lag = mean(mase_val < 1),
-            mean_mape = mean(mape_val))
-
-
-yearly_age_struggles_figure <- yearly_age_struggles %>%
-  ggplot(aes(year, mean_mape / 100, fill = p_beat_lag)) +
-  geom_hline(aes(yintercept = 0)) +
-  geom_col() + 
-  scale_y_continuous(labels = scales::label_percent(accuracy = 1), name = "Mean Absolute Percent Error",
-                     expand = c(0,NA)) + 
-  scale_x_continuous(name = '') +
-  scale_fill_viridis_c(labels = percent, name = "% Beating Lag")+ 
-  facet_wrap(~age_group, scales = "free_y")
-
-
-  # repeat but by age classes
-  
-  age_system_mase <- forecasts %>%
-    group_by(model, age_group, system) %>%
-    summarize(
-      mase_val = my_mase(observed, forecast, lag_observed),
-      rmse_val = yardstick::rmse_vec(observed, forecast)
-    )
-  
-  age_system_mase %>% group_by(model, age_group) %>% summarize(nsigs = sum(mase_val < 1)) %>%
-    group_by(model) %>% mutate(sum_nsigs = sum(nsigs)) %>%
-    dcast(model + sum_nsigs ~ age_group, value.var = 'nsigs') %>%
-    arrange(desc(sum_nsigs)) %>% write_csv(path = file.path(results_dir, "model_age_class.csv"))
-  
-
-  forecasts$resid <- forecasts$observed - forecasts$forecast
-  
-  #1_2
-  resids_1_2_plot <- forecasts %>% filter(age_group == "1_2") %>% 
-    ggplot(aes(x = year, y = resid, group = model,
-               colour = model)) + geom_line() + 
-    geom_hline(yintercept = 0, lty = 2) +
-    facet_wrap(~ system, scales = 'free_y')+
-    theme(legend.position = c(.75, .15)) + ggtitle("Age Class 1_2") +
-    xlab("Return Year") + ylab("Residuals")
-    
-  
-  #1_3
-    resids_1_3_plot <- forecasts %>% filter(age_group == "1_3") %>% 
-      ggplot(aes(x = year, y = resid, group = model,
-                 colour = model)) + geom_line() + 
-      geom_hline(yintercept = 0, lty = 2) +
-      facet_wrap(~ system, scales = 'free_y')+
-      theme(legend.position = c(.75, .15)) + ggtitle("Age Class 1_3") +
-      xlab("Return Year") + ylab("Residuals")
-  
-  #2_2
-    resids_2_2_plot <- forecasts %>% filter(age_group == "2_2") %>% 
-      ggplot(aes(x = year, y = resid, group = model,
-                 colour = model)) + geom_line() + 
-      geom_hline(yintercept = 0, lty = 2) +
-      facet_wrap(~ system, scales = 'free_y')+
-      theme(legend.position = c(.75, .15)) + ggtitle("Age Class 2_2") +
-      xlab("Return Year") + ylab("Residuals")
-  
-  #2_3
-    resids_2_3_plot <- forecasts %>% filter(age_group == "2_3") %>% 
-      ggplot(aes(x = year, y = resid, group = model,
-                 colour = model)) + geom_line() + 
-      geom_hline(yintercept = 0, lty = 2) +
-      facet_wrap(~ system, scales = 'free_y')+
-      theme(legend.position = c(.75, .15)) + ggtitle("Age Class 2_3") +
-      xlab("Return Year") + ylab("Residuals")
-  
-    
-
 # VOI plot ----------------------------------------------------------------
-
+browser()
     
     if (file.exists(file.path(results_dir, "next_forecast.rds"))){
       
@@ -1519,14 +1200,14 @@ yearly_age_struggles_figure <- yearly_age_struggles %>%
         select(dplyr::everything(),-Totals, Totals) %>% 
         arrange(desc(year))
       
-      raw_forecast_table %>%
-        pivot_longer(contains("_"), names_to = "age_group", values_to = "forecast") %>%
-        group_by(year, model) %>%
-        summarise(total_forecast = sum(forecast)) %>%
-        ungroup() %>%
-        ggplot(aes(year, total_forecast, color  = model)) +
-        geom_line()
-      
+      # raw_forecast_table %>%
+      #   pivot_longer(contains("_"), names_to = "age_group", values_to = "forecast") %>%
+      #   group_by(year, model) %>%
+      #   summarise(total_forecast = sum(forecast)) %>%
+      #   ungroup() %>%
+      #   ggplot(aes(year, total_forecast, color  = model)) +
+      #   geom_line()
+      # 
       write_csv(raw_forecast_table %>% mutate_if(is.numeric,round), file.path(results_dir, "raw-machine-learning-forecast-table.csv"))
       
       total_vars <- colnames(raw_forecast_table)

@@ -521,8 +521,8 @@ fit_ml_salmon <- function(dep_age,
  
   best_params <- best_params %>%
     group_by(across({{tune_vars}})) %>%
-    yardstick::mae(observed, .pred) %>%
-    # yardstick::rmse(observed, .pred) %>%
+    # yardstick::mae(observed, .pred) %>%
+    yardstick::rmse(observed, .pred) %>%
     ungroup()
 
   # a = best_params %>%
