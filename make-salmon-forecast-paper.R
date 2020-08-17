@@ -10,7 +10,7 @@ functions <- list.files(here::here("functions"))
 
 purrr::walk(functions, ~ source(here::here("functions", .x)))
 
-prep_run(results_name = "v0.5.3", results_description = "draft publication with boost tree improvements loo starting in 1990",
+prep_run(results_name = "v0.5.3", results_description = "draft publication with boost tree improvements loo starting in 1990 on abalone",
          first_year = 1990, 
          last_year = 2019,
          min_year = 1963, 
@@ -253,7 +253,7 @@ if (fit_statistical_ensemble){
       ) %>%
       dials::finalize(mtry(), x = training_ensemble_data %>% select(-(1:2)))
     
-    xgboost_grid <- grid_latin_hypercube(tune_grid, size = 50) 
+    xgboost_grid <- grid_latin_hypercube(tune_grid, size = 30) 
     
     xgboost_model <-
       parsnip::boost_tree(
@@ -313,7 +313,7 @@ if (fit_statistical_ensemble){
     # show_best(xgboost_tuning, "rmse")
     # 
     
-    best_rmse <- tune::select_best(xgboost_tuning, metric = "rmse")
+    best_rmse <- tune::select_best(xgboost_tuning, metric = "mae")
     
     # final_ranger_model <- finalize_workflow(
     #   ranger_workflow,

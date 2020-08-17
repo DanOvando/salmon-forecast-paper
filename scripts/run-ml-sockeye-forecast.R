@@ -54,7 +54,7 @@
 
 fit_parsnip_models <- TRUE
 
-fit_rnn_models <- TRUE
+fit_rnn_models <- FALSE
 
 run_query_erddap <-  TRUE
 
@@ -66,7 +66,7 @@ stride <- 4 #stride for errdaap data
 
 weight_returns <- FALSE
 
-cores <- parallel::detectCores() - 2
+cores <- parallel::detectCores() - 3
 
 trees <- 1000
 
@@ -546,13 +546,13 @@ looframe <-
 future::plan(future::multiprocess, workers = cores)
 
 if (fit_parsnip_models == TRUE){
-
+# browser()
         a <- Sys.time()
         set.seed(42)
         loo_preds <- looframe %>%
           ungroup() %>% 
-          # filter(model_type == "boost_tree") %>%
-          # sample_n(6) %>%
+          # filter(model_type == "rand_forest") %>%
+          # sample_n(4) %>%
           mutate(pred = future_pmap(
             list(
             pred_system = pred_system,
