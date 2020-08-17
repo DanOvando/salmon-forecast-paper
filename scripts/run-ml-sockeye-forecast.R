@@ -543,16 +543,17 @@ looframe <-
 
 
 
-future::plan(future::multiprocess, workers = cores)
-
+future::plan(future::multiprocess, workers = detectCores()/2 - 2)
+# browser()
 if (fit_parsnip_models == TRUE){
 # browser()
         a <- Sys.time()
         set.seed(42)
         loo_preds <- looframe %>%
           ungroup() %>% 
+          # slice(15) %>% 
           # filter(model_type == "rand_forest") %>%
-          # sample_n(4) %>%
+          # sample_n(20) %>%
           mutate(pred = future_pmap(
             list(
             pred_system = pred_system,
@@ -575,10 +576,9 @@ if (fit_parsnip_models == TRUE){
             freshwater_cohort = freshwater_cohort,
             weight = weight_returns,
             trees = trees,
-            initial_prop = 0.75,
+            initial_prop = 0.8,
             forecast = FALSE,
-            .progress = TRUE
-          ))
+            .progress = TRUE))
         Sys.time() - a
       
   write_rds(loo_preds, path = file.path(results_dir, "parsnip_loo_preds.rds"))
@@ -1152,7 +1152,8 @@ forecast_fit <- predframe %>%
       trees = trees,
       produce = "fits",
       forecast = TRUE,
-      .progress = TRUE
+      .progress = TRUE,
+      initial_prop  = 0.8
     )
   )
 

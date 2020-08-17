@@ -425,7 +425,7 @@ fit_ml_salmon <- function(dep_age,
     tune_grid <- parameters(min_n(range(2, 10)),mtry(), trees(range(500, 2000)))  %>% 
       dials::finalize(mtry(), x = baked_salmon %>% select(-(1:2))) 
     
-    ranger_grid <- grid_latin_hypercube(tune_grid, size = 15) %>% 
+    ranger_grid <- grid_latin_hypercube(tune_grid, size = 10) %>% 
       mutate(grid_row = 1:nrow(.))
     
     tune_grid <- tidyr::expand_grid(grid_row = 1:nrow(ranger_grid), id = unique(salmon_rolling_origin$id)) %>% 
@@ -472,7 +472,7 @@ fit_ml_salmon <- function(dep_age,
       ) %>%
       dials::finalize(mtry(), x = baked_salmon %>% select(-(1:2))) 
     
-    xgboost_grid <- grid_latin_hypercube(tune_grid, size = 30) %>% 
+    xgboost_grid <- grid_latin_hypercube(tune_grid, size = 20) %>% 
       mutate(grid_row = 1:nrow(.)) #%>% 
       # mutate(trees = trees)
     tune_grid <- tidyr::expand_grid(grid_row = 1:nrow(xgboost_grid), id = unique(salmon_rolling_origin$id)) %>% 
@@ -499,7 +499,9 @@ fit_ml_salmon <- function(dep_age,
   
   # View(juice(prepped_salmon))
   # a <- Sys.time()
-  tuning_fit <- pmap(
+  future::plan(future::multiprocess, workers = 2)
+  
+  tuning_fit <- future_pmap(
     tune_pars,
     tune_salmon,
     model_type = model_type,
