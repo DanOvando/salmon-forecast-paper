@@ -422,10 +422,10 @@ fit_ml_salmon <- function(dep_age,
     # ) %>%
     #   left_join(salmon_rolling_origin, by = "id")
     
-    tune_grid <- parameters(min_n(),mtry(), trees())  %>% 
-      dials::finalize(mtry(), x = baked_salmon %>% select(-(1:2)))
+    tune_grid <- parameters(min_n(range(2, 10)),mtry(), trees(range(500, 2000)))  %>% 
+      dials::finalize(mtry(), x = baked_salmon %>% select(-(1:2))) 
     
-    ranger_grid <- grid_latin_hypercube(tune_grid, size = 30) %>% 
+    ranger_grid <- grid_latin_hypercube(tune_grid, size = 10) %>% 
       mutate(grid_row = 1:nrow(.))
     
     tune_grid <- tidyr::expand_grid(grid_row = 1:nrow(ranger_grid), id = unique(salmon_rolling_origin$id)) %>% 
@@ -466,13 +466,13 @@ fit_ml_salmon <- function(dep_age,
         tree_depth(range(2, 15)),
         learn_rate(c(log10(.05),log10(.6))),
         mtry(),
-        loss_reduction(),
-        sample_size(range = c(1, 1)),
-        trees(range = c(500, 2000))
+        loss_reduction(range(-15,log10(sd(salmon_data$ret)))),
+        sample_size(range(1, 1)),
+        trees(range(500, 2000))
       ) %>%
-      dials::finalize(mtry(), x = baked_salmon %>% select(-(1:2)))
+      dials::finalize(mtry(), x = baked_salmon %>% select(-(1:2))) 
     
-    xgboost_grid <- grid_latin_hypercube(tune_grid, size = 30) %>% 
+    xgboost_grid <- grid_latin_hypercube(tune_grid, size = 20) %>% 
       mutate(grid_row = 1:nrow(.)) #%>% 
       # mutate(trees = trees)
     tune_grid <- tidyr::expand_grid(grid_row = 1:nrow(xgboost_grid), id = unique(salmon_rolling_origin$id)) %>% 
@@ -497,9 +497,10 @@ fit_ml_salmon <- function(dep_age,
   tune_pars <- tune_grid[, colnames(tune_grid) != "id"] %>%
     as.list()
   
-  # View(juice(prepped_salmon))
   # a <- Sys.time()
-  tuning_fit <- pmap(
+  future::plan(future::multiprocess, workers = 2)
+  
+  tuning_fit <- future_pmap(
     tune_pars,
     tune_salmon,
     model_type = model_type,
@@ -507,10 +508,7 @@ fit_ml_salmon <- function(dep_age,
     log_returns = log_returns
   )
   
-  # b <- Sys.time() - a
-  # browser()
   tune_grid$tuning_fit <- tuning_fit
-  
   
   best_params <- tune_grid %>%
     select(-splits) %>%
@@ -602,13 +600,12 @@ fit_ml_salmon <- function(dep_age,
     
   } # close model_type == "random_forest"
   if (model_type == "boost_tree") {
-    
     trained_model <-
       parsnip::boost_tree(
         mode = "regression",
         mtry = best$mtry,
         min_n = best$min_n,
-        loss_reduction = best$loss_reduction,
+        loss_reduction = best$loss_reduction ,
         sample_size = best$sample_size, 
         learn_rate = best$learn_rate,
         tree_depth = best$tree_depth,
@@ -644,6 +641,7 @@ fit_ml_salmon <- function(dep_age,
   pred <-
     predict(trained_model, new_data = bake(prepped_salmon, salmon_data))
   
+  # plot(a$ret, pred$.pred)
   
   if (delta_returns) {
     salmon_data$ret <- ogret

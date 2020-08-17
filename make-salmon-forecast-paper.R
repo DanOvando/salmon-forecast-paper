@@ -18,11 +18,11 @@ prep_run(results_name = "v0.5.4", results_description = "draft publication with 
 
 options(dplyr.summarise.inform = FALSE)
 
-run_edm_forecast <- FALSE
+run_edm_forecast <- TRUE
 
-run_dlm_forecast <- FALSE
+run_dlm_forecast <- TRUE
 
-run_ml_forecast <- FALSE
+run_ml_forecast <- TRUE
 
 fit_statistical_ensemble <- TRUE
 
@@ -169,36 +169,6 @@ forecasts %>%
 
 # construct statistical ensemble ------------------------------------------
 
-# what should an emsemble look like? Depends a bit on the scale, but for now let's try it at the
-# finest resolution possible
-
-# a = (forecasts %>% filter(year == 1990, system == "Naknek"))
-# 
-# b <- pivot_wider(a, names_from = "model", values_from = "forecast")
-
-
-# ensemble_data <- forecasts %>% 
-#   mutate(observed = observed / scalar,
-#          forecast = forecast / scalar) %>% 
-#   group_by(model, system, age_group) %>%
-#   arrange(year) %>%
-#   mutate(last_observed = lag(observed, 1)) %>%
-#   filter(year > first_year, 
-#          model != "fri") %>% 
-#   ungroup() %>% 
-#   pivot_wider(names_from = "model", values_from = "forecast") %>% 
-#   group_by(system) %>% 
-#   mutate(sys_weight = 1 / length(observed))%>% 
-#   ungroup()
-# mutate(return_rank = percent_rank(observed)) %>% 
-# mutate(return_type = case_when(return_rank > 0.66 ~ "boom", return_rank < 0.33 ~ "bust", TRUE ~ "meh"))
-
-# ensemble_data[is.na(ensemble_data)] <- -999
-
-# ensemble_data <- ensemble_data %>% 
-#   arrange(year)
-
-
 ensemble_dep_data <- forecasts %>% 
   mutate(observed = observed / scalar,
          forecast = forecast / scalar) %>% 
@@ -216,10 +186,6 @@ ensemble_data <- forecasts %>%
   ungroup() %>% 
   left_join(ensemble_dep_data, by = c("year", "system")) %>% 
   filter(year > first_year)
-
-
-# mutate(return_rank = percent_rank(observed)) %>% 
-# mutate(return_type = case_when(return_rank > 0.66 ~ "boom", return_rank < 0.33 ~ "bust", TRUE ~ "meh"))
 
 ensemble_data[is.na(ensemble_data)] <- -999
 
@@ -245,16 +211,17 @@ if (fit_statistical_ensemble){
     tune_grid <-
       parameters(
         min_n(range(1, 10)),
-        tree_depth(range(2, 15)),
-        learn_rate(range = c(log10(.05), log10(.6))),
+        tree_depth(range(2, 20)),
+        learn_rate(range = c(log10(.1), log10(.6))),
         mtry(),
-        loss_reduction(),
+        loss_reduction(range(-10,-5)),
         sample_prop(range = c(1, 1)),
         trees(range = c(500, 2000))
       ) %>%
       dials::finalize(mtry(), x = training_ensemble_data %>% select(-(1:2)))
     
     xgboost_grid <- grid_latin_hypercube(tune_grid, size = 20) 
+
     
     xgboost_model <-
       parsnip::boost_tree(
@@ -289,12 +256,7 @@ if (fit_statistical_ensemble){
     )
     
     best_vals <- tune::select_best(xgboost_tuning, metric = "rmse")
-    
-    # final_ranger_model <- finalize_workflow(
-    #   ranger_workflow,
-    #   best_rmse
-    # )
-    
+
     final_workflow <- finalize_workflow(
       xgboost_workflow,
       best_vals

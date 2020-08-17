@@ -54,7 +54,7 @@
 
 fit_parsnip_models <- TRUE
 
-fit_rnn_models <- TRUE
+fit_rnn_models <- FALSE
 
 run_query_erddap <-  TRUE
 
@@ -66,7 +66,7 @@ stride <- 4 #stride for errdaap data
 
 weight_returns <- FALSE
 
-cores <- parallel::detectCores() - 2
+cores <- parallel::detectCores()/2 - 2
 
 trees <- 1000
 
@@ -544,15 +544,16 @@ looframe <-
 
 
 future::plan(future::multiprocess, workers = cores)
-
+# browser()
 if (fit_parsnip_models == TRUE){
-
+# browser()
         a <- Sys.time()
         set.seed(42)
         loo_preds <- looframe %>%
           ungroup() %>% 
-          # filter(model_type == "boost_tree") %>%
-          # sample_n(6) %>%
+          # slice(15) %>% 
+          # filter(model_type == "rand_forest") %>%
+          # sample_n(20) %>%
           mutate(pred = future_pmap(
             list(
             pred_system = pred_system,
@@ -575,10 +576,9 @@ if (fit_parsnip_models == TRUE){
             freshwater_cohort = freshwater_cohort,
             weight = weight_returns,
             trees = trees,
-            initial_prop = 0.75,
+            initial_prop = 0.8,
             forecast = FALSE,
-            .progress = TRUE
-          ))
+            .progress = TRUE))
         Sys.time() - a
       
   write_rds(loo_preds, path = file.path(results_dir, "parsnip_loo_preds.rds"))
@@ -586,23 +586,6 @@ if (fit_parsnip_models == TRUE){
 } else {
   loo_preds <- readr::read_rds(file.path(results_dir, "parsnip_loo_preds.rds"))
 }
-
-
-
-# huh <- loo_preds %>% 
-#   filter(model_type == "boost_tree",
-#          dep_age == "2.2") %>% 
-#   mutate(i = 1:nrow(.)) %>% 
-#   mutate(best_params = map(pred, "best_params")) %>% 
-#   select(-pred) %>% 
-#   unnest(cols = best_params) %>% 
-#   group_by(i) %>% 
-#   filter(.estimate == min(.estimate))
-# 
-# hist(huh$learn_rate)
-
-
-
 
 
 # run recurrent neural nets -----------------------------------------------
@@ -1152,7 +1135,8 @@ forecast_fit <- predframe %>%
       trees = trees,
       produce = "fits",
       forecast = TRUE,
-      .progress = TRUE
+      .progress = TRUE,
+      initial_prop  = 0.8
     )
   )
 

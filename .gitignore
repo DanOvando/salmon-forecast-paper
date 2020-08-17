@@ -11,6 +11,9 @@ results/**/fits/
 *.html
 *.jpg
 *.js
+
+!imgs/*.png
+
 presentations/processor-meeting-jan-2020
 presentations/asp-2019
 !results/**/*_loo_results.csv
