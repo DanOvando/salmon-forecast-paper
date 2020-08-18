@@ -18,13 +18,13 @@ prep_run(results_name = "v0.5.4", results_description = "draft publication with 
 
 options(dplyr.summarise.inform = FALSE)
 
-run_edm_forecast <- TRUE
+run_edm_forecast <- FALSE
 
-run_dlm_forecast <- TRUE
+run_dlm_forecast <- FALSE
 
-run_ml_forecast <- TRUE
+run_ml_forecast <- FALSE
 
-fit_statistical_ensemble <- TRUE
+fit_statistical_ensemble <- FALSE
 
 run_importance <- TRUE
 
@@ -211,7 +211,7 @@ if (fit_statistical_ensemble){
     tune_grid <-
       parameters(
         min_n(range(1, 10)),
-        tree_depth(range(2, 20)),
+        tree_depth(range(2, 15)),
         learn_rate(range = c(log10(.1), log10(.6))),
         mtry(),
         loss_reduction(range(-10,-5)),
@@ -1106,6 +1106,9 @@ age_concordance <- age_pre %>%
 # system residuals --------------------------------------------------------
 
 yearly_system_resid_struggles_figure <- system_forecast %>% 
+  mutate(resid = forecast - observed) %>% 
+  group_by(system) %>% 
+  mutate(scaled_resid = scale(resid)) %>% 
   filter(!model %in% c("boost_tree_ensemble","fri")) %>% 
   ggplot() + 
   geom_ribbon(aes(year, ymin = 1, ymax = 4), fill = "tomato", alpha = 0.5) +
@@ -1123,8 +1126,7 @@ yearly_system_resid_struggles_figure <- system_forecast %>%
 
 yearly_system_resid_struggles_figure
 # VOI plot ----------------------------------------------------------------
-browser()
-    
+
     if (file.exists(file.path(results_dir, "next_forecast.rds"))){
       
       next_forecast <- read_rds(file.path(results_dir, "next_forecast.rds"))
@@ -1243,11 +1245,14 @@ browser()
       
     
       system_varimportance_figure <- system_importance %>% 
+        mutate(short_feature = case_when(short_feature == "ret_yr" ~ "Return Year", short_feature == "env_sst" ~ "SST", short_feature == "env_slp" ~"SLP", TRUE ~ short_feature)) %>% 
+        mutate(short_feature = snakecase::to_title_case(short_feature)) %>% 
         filter(mean_importance > 0.05) %>% 
         ggplot(aes(reorder(short_feature,mean_importance), mean_importance)) + 
+        geom_hline(aes(yintercept = 0)) +
         geom_col() + 
-        facet_wrap(~ pred_system, scales = "free") + 
-        scale_x_discrete(name = "Variable") +
+        facet_wrap(~ pred_system, scales = "free_y") + 
+        scale_x_discrete(name = "", guide = guide_axis(check.overlap = TRUE)) +
         scale_y_continuous(name = "Mean Variable Importance") + 
         coord_flip() 
         
