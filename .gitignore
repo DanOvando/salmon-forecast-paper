@@ -14,6 +14,9 @@ results/**/fits/
 
 !imgs/*.png
 
+!README_files/**/*.pdf
+
+
 presentations/processor-meeting-jan-2020
 presentations/asp-2019
 !results/**/*_loo_results.csv
