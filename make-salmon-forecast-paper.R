@@ -10,14 +10,14 @@ functions <- list.files(here::here("functions"))
 
 purrr::walk(functions, ~ source(here::here("functions", .x)))
 
-prep_run(results_name = "v0.5.3", results_description = "draft publication with boost tree improvements loo starting in 1990 on abalone",
+prep_run(results_name = "v0.5.4", results_description = "draft publication with boost tree improvements loo starting in 1990 on abalone",
          first_year = 1990, 
          last_year = 2019,
          min_year = 1963, 
          eval_year = 2000)
 
 message(
-  "This analysis takes about 24 hours to run on 12 cores - get it running and go have a nice weekend"
+  "This analysis takes about 15 hours to run on 12 cores - get it running and go have a nice weekend"
 )
 
 options(dplyr.summarise.inform = FALSE)
@@ -37,7 +37,7 @@ scalar <- 1000
 extrafont::loadfonts()
 
 pub_theme <-
-  hrbrthemes::theme_ipsum(base_size = 12, axis_text_size = 12, axis_title_size = 14) +
+  hrbrthemes::theme_ipsum(base_size = 10, axis_text_size = 8, axis_title_size = 12) +
   theme(
     panel.spacing = unit(1, "lines"),
     plot.margin = unit(rep(10, 4), units = "points")
@@ -335,7 +335,6 @@ if (fit_statistical_ensemble){
 temp <- ensemble_fits %>% 
   unnest(cols = ensemble)
 
-
 forecasts <- forecasts %>% 
   filter(year >= eval_year)
 
@@ -344,12 +343,6 @@ ensemble_forecasts <- temp %>%
   mutate(model = "boost_tree_ensemble") %>% 
   mutate(observed = observed * scalar,
          ensemble_forecast = ensemble_forecast * scalar) 
-
-ensemble_forecasts %>% 
-  ggplot(aes(observed, ensemble_forecast)) + 
-  geom_point() + 
-  geom_abline(aes(slope = 1, intercept = 0)) +
-  facet_wrap(~set)
 
 total_ensemble_plot <- ensemble_forecasts %>% 
   group_by(year, set) %>% 
@@ -360,19 +353,6 @@ total_ensemble_plot <- ensemble_forecasts %>%
   geom_col(aes(year, observed)) + 
   geom_point(aes(year, ensemble_forecast), shape = 21)
 
-
-system_ensemble_plot <- ensemble_forecasts %>% 
-  group_by(year, system, set) %>% 
-  summarise(observed = sum(observed),
-            ensemble_forecast = sum(ensemble_forecast)) %>% 
-  # group_by(system) %>% 
-  # mutate(observed = scale(observed),
-  # ensemble_forecast = scale(ensemble_forecast)) %>% 
-  ungroup() %>% 
-  ggplot(aes(fill = set)) +
-  geom_col(aes(year, observed)) + 
-  geom_point(aes(year, ensemble_forecast),shape = 21) + 
-  facet_wrap(~system, scales = "free_y")
 
 system_ensemble_forecasts <- ensemble_forecasts %>% 
   rename(forecast = ensemble_forecast) %>% 
@@ -776,41 +756,12 @@ age_system_return_plot <- salmon_data %>%
   facet_wrap(~system, scales = "free_y")
 
 
-age_system_return_plot
-
-# plot_area <- (alaska_bbox['xmax'] - alaska_bbox['xmin']) *  (alaska_bbox['ymax'] - alaska_bbox['ymin'])
-# 
-# df <- tibble(x = alaska_bbox["xmin"] * 0.9,
-#              y = alaska_bbox["ymin"] * 3,
-#              width = 2e6,
-#              height = 2e6,
-#              pie = list(return_plot))
-# 
-# bristol_bay_plot + theme_classic() + geom_subview(aes(x=x, y=y, subview=pie, width=width, height=height), data=df)
-
-
-# figure 2 ----------------------------------------------------------------
-
-# placeholder for summary of historic performance?
-
+age_system_return_plot 
 
 
 # figure 3 ----------------------------------------------------------------
 
-
-# forecasts %>% 
-#   group_by(year, model) %>% 
-#   summarise(r = sum(observed)) %>% View()
-
 pal <- pnw_palette("Winter",n = n_distinct(system_performance$model))
-
-# nush <- system_performance %>% 
-#   filter(system == "Nushagak")
-# 
-# nush %>% 
-#   ggplot(aes(mae, rmse, color = model)) + 
-#   geom_abline(slope = 1, intercept = 0) +
-#   geom_point()
 
 top_models <- system_performance %>% 
   group_by(system) %>% 
@@ -838,7 +789,7 @@ top_system_forecast <- system_forecast %>%
 system_forecast_figure <- top_system_forecast %>% 
   ggplot() + 
   geom_area(aes(year, observed), fill = "darkgray") + 
-  geom_point(aes(year, forecast, fill = model, alpha = srmse), shape = 21, size = 3) +
+  geom_point(aes(year, forecast, fill = model, alpha = srmse), shape = 21, size = 2) +
   facet_wrap(~system, scales = "free_y") + 
   fishualize::scale_fill_fish_d(name = '',option = "Trimma_lantana") + 
   fishualize::scale_color_fish_d(name = '',option = "Trimma_lantana") + 
@@ -882,7 +833,7 @@ top_age_forecast <- age_forecast %>%
 age_forecast_figure <- top_age_forecast %>% 
   ggplot() + 
   geom_area(aes(year, observed), fill = "darkgray") + 
-  geom_point(aes(year, forecast, fill = model, alpha = srmse), shape = 21, size = 3) +
+  geom_point(aes(year, forecast, fill = model, alpha = srmse), shape = 21, size = 2) +
   facet_wrap(~age_group, scales = "free_y") + 
   fishualize::scale_fill_fish_d(name = '', option = "Trimma_lantana") + 
   fishualize::scale_color_fish_d(name = '',option = "Trimma_lantana") + 
@@ -920,7 +871,7 @@ top_total_forecast <- total_forecast %>%
 total_forecast_figure <- top_total_forecast %>% 
   ggplot() + 
   geom_area(aes(year, observed), fill = "darkgray") + 
-  geom_point(aes(year, forecast, fill = model, alpha = srmse), shape = 21, size = 3) +
+  geom_point(aes(year, forecast, fill = model, alpha = srmse), shape = 21, size = 2) +
   fishualize::scale_fill_fish_d(option = "Trimma_lantana") + 
   fishualize::scale_color_fish_d(option = "Trimma_lantana") + 
   scale_alpha_continuous(range = c(1,0.25), name = "SRMSE") + 
@@ -965,9 +916,10 @@ top_ensemble_system_forecast <- system_forecast %>%
   left_join(ensemble_performance, by = c("system","model"))
 
 system_ensemble_forecast_figure <- top_ensemble_system_forecast %>% 
+  mutate(model = snakecase::to_title_case(model)) %>% 
   ggplot() + 
   geom_area(aes(year, observed), fill = "darkgray") + 
-  geom_point(aes(year, forecast, shape = model, fill = ens_improvement), size = 4, alpha = 0.95) +
+  geom_point(aes(year, forecast, shape = model, fill = ens_improvement), size = 2, alpha = 0.95) +
   scale_fill_gradient2(low = "tomato", high = "steelblue", mid = "white", midpoint = 0,labels = label_percent(accuracy = 1),
                        guide = guide_colorbar(frame.colour = "black", ticks.colour = "black"),
                        name = "% Ensemble Improvement") +
@@ -978,7 +930,7 @@ system_ensemble_forecast_figure <- top_ensemble_system_forecast %>%
   scale_x_continuous(name = '') + 
   scale_y_continuous(expand = expansion(c(0,.05)), name = "Returns (Millions of Salmon)") + 
   theme(legend.direction = "horizontal", 
-        legend.position = c(.7,.2)) + 
+        legend.position = c(.7,.1)) + 
   facet_wrap(~system, scales = "free_y")
   
 
@@ -1121,12 +1073,12 @@ yearly_system_resid_struggles_figure <- system_forecast %>%
   geom_line(aes(year, scaled_resid, color = model)) + 
   facet_wrap(~system) + 
   # scale_color_simpsons(name = '') +
-  # fishualize::scale_color_fish_d(option = "Trimma_lantana", name = '') + 
+  fishualize::scale_color_fish_d(option = "Trimma_lantana", name = '') +
   theme(legend.position = c(0.7, .15), 
         legend.direction = "horizontal") + 
   scale_x_continuous(name = "") + 
-  scale_y_continuous(name = "Standardized Residuals", limits = c(-4,4)) + 
-  scale_color_discrete(name = '')
+  scale_y_continuous(name = "Standardized Residuals", limits = c(-4,4))
+  # scale_color_discrete(name = '')
 
 yearly_system_resid_struggles_figure
 # VOI plot ----------------------------------------------------------------
@@ -1256,9 +1208,10 @@ yearly_system_resid_struggles_figure
         geom_hline(aes(yintercept = 0)) +
         geom_col() + 
         facet_wrap(~ pred_system, scales = "free_y") + 
-        scale_x_discrete(name = "", guide = guide_axis(check.overlap = TRUE)) +
+        scale_x_discrete(name = "", guide = guide_axis(check.overlap = FALSE)) +
         scale_y_continuous(name = "Mean Variable Importance") + 
-        coord_flip() 
+        coord_flip() + 
+        theme(axis.text.y = element_text(size = 8))
         
       system_varimportance_figure
   
