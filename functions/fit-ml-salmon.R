@@ -498,7 +498,9 @@ fit_ml_salmon <- function(dep_age,
     as.list()
   
   # a <- Sys.time()
-  future::plan(future::multiprocess, workers = 2)
+  fplan <- future::plan(future::multiprocess, workers = 2)
+  
+  on.exit(plan(fplan), add = TRUE)
   
   tuning_fit <- future_pmap(
     tune_pars,

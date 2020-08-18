@@ -10,17 +10,21 @@ functions <- list.files(here::here("functions"))
 
 purrr::walk(functions, ~ source(here::here("functions", .x)))
 
-prep_run(results_name = "v0.5.4", results_description = "draft publication with boost tree improvements loo starting in 1990",
+prep_run(results_name = "v0.5.3", results_description = "draft publication with boost tree improvements loo starting in 1990 on abalone",
          first_year = 1990, 
          last_year = 2019,
          min_year = 1963, 
          eval_year = 2000)
 
+message(
+  "This analysis takes about 24 hours to run on 12 cores - get it running and go have a nice weekend"
+)
+
 options(dplyr.summarise.inform = FALSE)
 
-run_edm_forecast <- TRUE
+run_edm_forecast <- FALSE
 
-run_dlm_forecast <- TRUE
+run_dlm_forecast <- FALSE
 
 run_ml_forecast <- TRUE
 
@@ -211,7 +215,7 @@ if (fit_statistical_ensemble){
     tune_grid <-
       parameters(
         min_n(range(1, 10)),
-        tree_depth(range(2, 20)),
+        tree_depth(range(2, 15)),
         learn_rate(range = c(log10(.1), log10(.6))),
         mtry(),
         loss_reduction(range(-10,-5)),
@@ -244,7 +248,7 @@ if (fit_statistical_ensemble){
       add_formula(observed ~ .) %>% 
       add_model(xgboost_model)
     
-    
+    doParallel::stopImplicitCluster()
     set.seed(234)
     doParallel::registerDoParallel(cores = parallel::detectCores() - 2)
 

@@ -68,6 +68,10 @@ weight_returns <- FALSE
 
 cores <- parallel::detectCores()/2 - 2
 
+future_plan <- future::plan(future::multiprocess, workers = cores)
+
+on.exit(plan(future_plan), add = TRUE)
+
 trees <- 1000
 
 freshwater_cohort <- TRUE #leave as true
@@ -543,7 +547,8 @@ looframe <-
 
 
 
-future::plan(future::multiprocess, workers = cores)
+
+
 # browser()
 if (fit_parsnip_models == TRUE){
 # browser()
@@ -553,7 +558,7 @@ if (fit_parsnip_models == TRUE){
           ungroup() %>% 
           # slice(15) %>% 
           # filter(model_type == "rand_forest") %>%
-          # sample_n(20) %>%
+          sample_n(20) %>%
           mutate(pred = future_pmap(
             list(
             pred_system = pred_system,
