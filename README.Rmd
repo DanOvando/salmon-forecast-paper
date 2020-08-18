@@ -4,7 +4,6 @@ params:
   results_name: ["v0.5.4"]
 ---
 
-<!-- README.md is generated from README.Rmd. Please edit that file -->
 
 ```{r, include = FALSE}
 knitr::opts_chunk$set(
@@ -16,7 +15,7 @@ knitr::opts_chunk$set(
 ```
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE,  dev = "cairo_pdf", message = FALSE, warning = FALSE)
+knitr::opts_chunk$set(echo = FALSE,  dev = "svg", message = FALSE, warning = FALSE)
 library(tidyverse)
 library(patchwork)
 library(cowplot)

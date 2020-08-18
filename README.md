@@ -1,6 +1,4 @@
 
-<!-- README.md is generated from README.Rmd. Please edit that file -->
-
 # Salmon Forecast Paper
 
 <!-- badges: start -->
@@ -88,8 +86,8 @@ at annual time steps for aquatic and terrestrial species.
 
 ## Sample Results
 
-![](README_files/figure-gfm/unnamed-chunk-3-1.pdf)<!-- -->
+![](README_files/figure-gfm/unnamed-chunk-3-1.svg)<!-- -->
 
-![](README_files/figure-gfm/unnamed-chunk-4-1.pdf)<!-- -->
+![](README_files/figure-gfm/unnamed-chunk-4-1.svg)<!-- -->
 
-![](README_files/figure-gfm/unnamed-chunk-5-1.pdf)<!-- -->
+![](README_files/figure-gfm/unnamed-chunk-5-1.svg)<!-- -->
