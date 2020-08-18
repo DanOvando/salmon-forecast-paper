@@ -30,7 +30,9 @@ run_ml_forecast <- FALSE
 
 fit_statistical_ensemble <- FALSE
 
-run_importance <- TRUE
+run_importance <- FALSE
+
+knit_manuscript <- TRUE
 
 scalar <- 1000
 
@@ -1291,3 +1293,9 @@ plotfoo <- function(x,height = 6, width = 9 , device = "pdf",path){
 
 walk(plots, plotfoo, path = fig_path, device = "png")
 
+if (knit_manuscript){
+  
+  rmarkdown::render(here::here("documents","salmon-forecast-paper.Rmd"), params = list(results_name = results_name))
+  
+  
+}

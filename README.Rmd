@@ -1,5 +1,7 @@
 ---
 output: github_document
+params: 
+  results_name: ["v0.5.4"]
 ---
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
@@ -9,6 +11,45 @@ knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>"
 )
+
+
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,  dev = "cairo_pdf", message = FALSE, warning = FALSE)
+library(tidyverse)
+library(patchwork)
+library(cowplot)
+library(magick)
+library(hrbrthemes)
+library(ggplot2)
+library(Cairo)
+library(extrafont)
+library(here)
+library(scales)
+extrafont::loadfonts()
+
+results_dir <- here("results", params$results_name)
+
+pub_theme <-
+  hrbrthemes::theme_ipsum(base_size = 10, axis_text_size = 8, axis_title_size = 12) +
+  theme(
+    panel.spacing = unit(0.5, "lines"),
+    plot.margin = unit(rep(10, 4), units = "points")
+  )
+
+theme_set(pub_theme)
+
+
+# load plots
+
+load(file = file.path(results_dir, "plots.RData"))
+
+load(file = file.path(results_dir, "performance.RData"))
+
+load(file = file.path(results_dir, "forecasts.RData"))
+
+
 ```
 
 # Salmon Forecast Paper
@@ -16,76 +57,60 @@ knitr::opts_chunk$set(
 <!-- badges: start -->
 <!-- badges: end -->
 
-Materials needed to produce results for the loosely titled "Evaluating the Potential of Computer-Age Statistical Methods in Ecological Forcasting"
+Materials needed to produce results for the loosely titled "Evaluating the Potential of Computer-Age Statistical Methods in Ecological Forecasting"
 
-The end goal is to allow the script `make-salmon-forecast-results.R` to produce all required results for our paper. We'll make that happen once we've all got our component scripts going though. 
 
-To facilitate this, I've set up a general structure to 
+## Reproducing Results
 
-1. Avoid library conflicts (e.g. one person loads `plyr` in their script after someone else has loaded `dplyr`)
+All materials needed to reproduce our results and manuscript are contained in this repository. In order to reproduce
 
-2. Ensure a consistent data and results structure. 
+1. Fork the repository and clone to your machine
 
-I've added a function to the `functions` folder called `prep-run.R`. Place any libraries you need in there. That function will also create (if needed) a folder for your results. For now, I suggest that each one of you source this function at the start of your individual script. Then, run `prep_run`, setting the name of the results folder you want to create/use. This will not overwrite anyone's results, but if you want to work in your own folder for now we can knit this all together once everything works. 
+2. Open R and set your working directory of the cloned repository (or just use RStudio projects)
 
-In the example below, this will load the function and create a folder called "test" inside the results folder. It will also add a variable called `results_dir` to the global environment where results should be saved. 
+3. This project is set up with [`renv`](https://rstudio.github.io/renv/articles/renv.html) to manage package dependencies. Inside R (and with your working directory set correctly) run `renv::restore()`. This will install the correct versions of all the packages needed to replicate our results. Packages are installed in a stand-alone project library for this paper, and will not affect your installed R packages anywhere else. 
 
-One things to note is that the repo ignores the results folder (so that we're not pushing and pulling masive results files constantly). So, in theory each one of us will need to re-run the others' results on our own systems to see them all. But, if that's a pain time-wise during development we can of course use google drive or whatever to share results. But, since all the code is mostly done at this point I don't anticipate a lot of code wrangling at this point?
+4. Open `make-salmon-forecast-paper.R` and
+  - set the name of the run in the call to `prep_run`
+  - ensure that 
 
-```{r, eval = TRUE, message=FALSE, warning=FALSE}
+```{r, eval = FALSE, echo = TRUE}
+run_edm_forecast <- TRUE
 
-functions <- list.files("functions")
+run_dlm_forecast <- TRUE
 
-sapply(functions, function(x) source(file.path("functions",x), print = FALSE))
+run_ml_forecast <- TRUE
 
-prep_run(results_name = "test", results_description = "testing")
+fit_statistical_ensemble <- TRUE
 
-results_dir
+run_importance <- TRUE
+
+knit_manuscript <- TRUE
+
+```
+
+5. source `make-salmon-forecast-paper.R`
+
+6. The resulting manuscript will be compiled in the documents folder
+
+## Abstract
+
+  Salmon are an ecological and economic keystone of Alaska. Effective management of these species depends on accurate pre-season forecasts, allowing fishery regulations to be set appropriately and fishing operations to plan their economic activities accordingly.  These predictions are challenging to make though, given the complex set of dynamic factors that affect numbers of returning salmon, from egg production to predation to environmental drivers. Computer-age statistical methods such as dynamic linear modeling, machine learning and empirical dynamical modeling have fundamentally transformed many aspects of our society by providing previously impossible levels of predictive accuracy to tasks from digital advertising to weather forecasting. However, these methods underutilized as applied tools for predicting and managing natural resources. We utilize data from the salmon populations of Bristol Bay,  Alaska to evaluate the potential for computer-age statistical methods to improve the accuracy of predictions of annual returns. Salmon present an ideal case study due to the presence of long and accurate time series of annual returns, and the ecological and economical  importance of reliable predictions to commercial fisheries and subsistence-dependent communities. We demonstrate how computer-age methods can help researchers and managers provide improvements in forecast skill, and identify when the bottleneck predictive skill is model design versus data. We also show that these methods may not be a panacea for improving predictive performance when confronted with time series of short duration, as are often found in analysis of population dynamics and ecological forecasting applications at annual time steps for aquatic and terrestrial species.  
+
+
+## Sample Results
+
+```{r}
+system_forecast_figure
 ```
 
 
-This step is pretty minor, just trying to avoid redundant and conflicting libraries. To make sure that everyone's scripts can run on all computers, I'd sugest using the `here` packages (`file.path` also works). `here` will create OS-correct paths on any computer. The only assumption is that the working directory is set to this repository (e.g. i.e. `salmon-forecast-paper`). You can then pass that path to `file.path` to save objects in the correct place. 
+```{r}
+age_system_performance_figure
+```
 
-In terms of results to save, the only thing I'd request is that we have a final dataframe with columns `model`,`brood_yr`,`return_year`, `system`, `age_group`, `observed_returns`, `predicted_returns` saved as a .rds file so that we can load and compare models. 
-
-`model` is the name of the model e.g. `dlm`, `age_group` is in format "freshwater age"_"ocean age"
-
-I think we decided that 1965 is the first year of data we'll use? So as long as we all start in 1965, and all predictions are one-step ahead predictions, should be able to compare performance easily. 
-
-To give an example
 
 ```{r}
-here::dr_here()
-
-returns <- read_csv(here("data","2019.csv")) %>% 
-  janitor::clean_names()
-
-lag_model <- returns %>%
-  tidyr::unite("age_group", contains("_age"), sep = '_') %>%
-  group_by(system, age_group) %>%
-  arrange(ret_yr) %>% 
-  mutate(predicted_returns = lag(ret),
-         model = "lag_1") %>%
-  ungroup() %>% 
-  rename(
-    return_year = ret_yr,
-    brood_year = brood_yr,
-    observed_returns = ret
-  ) %>%
-  select(
-    model,
-    brood_year,
-    return_year,
-    system,
-    age_group,
-    observed_returns,
-    predicted_returns
-  ) %>% 
-  filter(!is.na(predicted_returns))
-
-head(lag_model)
-
-write_rds(lag_model, path = file.path(results_dir,"lag_model_predictions.rds"))
-
+total_forecast_figure
 ```
 
