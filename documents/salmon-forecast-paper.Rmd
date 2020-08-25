@@ -15,8 +15,16 @@ bibliography: "../references.bib"
 csl: nature.csl
 params: 
   results_name: ["v0.5.4"]
+linkcolor: blue
+toc: true
+header-includes:
+  - \usepackage{setspace}\doublespacing
+  - \usepackage{lineno}\linenumbers
+  - \usepackage{draftwatermark}
+  - \SetWatermarkText{DRAFT}
+  - \SetWatermarkScale{1}
 abstract: |
-  Salmon are an ecological and economic keystone of Alaska. Effective management of these species depends on accurate pre-season forecasts, allowing fishery regulations to be set appropriately and fishing operations to plan their economic activities accordingly.  These predictions are challenging to make though, given the complex set of dynamic factors that affect numbers of returning salmon, from egg production to predation to environmental drivers. Computer-age statistical methods such as dynamic linear modeling, machine learning and empirical dynamical modeling have fundamentally transformed many aspects of our society by providing previously impossible levels of predictive accuracy to tasks from digital advertising to weather forecasting. However, these methods underutilized as applied tools for predicting and managing natural resources. We utilize data from the salmon populations of Bristol Bay,  Alaska to evaluate the potential for computer-age statistical methods to improve the accuracy of predictions of annual returns. Salmon present an ideal case study due to the presence of long and accurate time series of annual returns, and the ecological and economical  importance of reliable predictions to commercial fisheries and subsistence-dependent communities. We demonstrate how computer-age methods can help researchers and managers provide improvements in forecast skill, and identify when the bottleneck predictive skill is model design versus data. We also show that these methors may not be a panacea for improving predictive performance when confronted with time series of short duration, as are often found in analysis of population dynamics and ecological forecasting applications at annual time steps for aquatic and terrestrial species.  
+  Forecasting of fish populations is an integral part of management systems where quotas are set, and are often used by the harvest and processing sectors to make business plans.  Almost all fish forecasts are currently based on population dynamics using estimates of birth rates and survival from recent years.  Computer-age statistical methods such as dynamic linear modeling, machine learning and empirical dynamical modeling have fundamentally transformed many aspects of our society by providing previously impossible levels of predictive accuracy to tasks from digital advertising to weather forecasting. However, these methods are underutilized for predicting and managing natural resources. Salmon are an ecological and economic keystone of Alaska and the forecasts of salmon runs are used to plan staffing and supplies for processors and crew size and even whether to operate for the fishing fleets. These predictions are challenging to make though, given the complex set of dynamic factors that affect numbers of returning salmon, from egg production to predation to environmental drivers.. We utilize data from the salmon populations of Bristol Bay, Alaska to evaluate the potential for computer-age statistical methods to improve the accuracy of predictions of annual returns. Salmon present an ideal case study due to the presence of long and accurate time series of annual returns, and the ecological and economical importance of reliable predictions to commercial fisheries and subsistence-dependent communities. We demonstrate how computer-age methods can help researchers and managers provide improvements in forecast skill, and identify when the bottleneck predictive skill is model design versus data. We also show that these methods may not be a panacea for improving predictive performance when confronted with time series of short duration, as are often found in analysis of population dynamics and ecological forecasting applications at annual time steps for aquatic and terrestrial species.
 ---
 
 ```{r setup, include=FALSE}
@@ -71,9 +79,25 @@ load(file = file.path(results_dir, "forecasts.RData"))
 
 <!-- Rather than looking for one silver-bullet model, using multiple computer-age statistical models allows for improved forecasting and also highlights situations where you simply need more data.  -->
 
+
+<!-- \AddToShipoutPictureFG{ -->
+<!--   \AtPageCenter{% or \AtTextCenter -->
+<!--     \makebox[0pt]{\rotatebox[origin=c]{45}{% -->
+<!--       \scalebox{5}{\texttransparent{0.3}{DRAFT}}% -->
+<!--     }} -->
+<!--   } -->
+<!-- } -->
+
+
+
 # Introduction
 
-Animal populations exhibit complex dynamics driven by interactions with a myriad of aspects of their ecosystem. Predicting the outcomes of these dynamics is a critical task of natural resource management. The past two decades have seen explosive progress in the ability of “computer age” statistical methods to make accurate predictions [@efron2016], revolutionizing fields such as financial modeling, weather forecasting, and medicine. However, these methods remain relatively unused in ecological forecasting, particularly in an applied setting [@peters2014]. We use the ecologically and economically vital sockeye salmon populations of Bristol Bay, Alaska, to demonstrate both the potential and limitations of computer age statistical methods in ecological forecasting, by directly comparing the realized predictive performance of a wide range of applicable statistical forecasting tools. 
+<!-- These things have revolutionized lots of fields, but not so much ours yet. Use this to show how it could be done.  -->
+
+Animal populations exhibit complex dynamics driven by interactions with a myriad of aspects of their ecosystem. Predicting the outcomes of these dynamics is a critical task of natural resource management.  Forecasts of future abundance are often used to set fisheries quotas,  and vessel operators may make decisions about alternative fisheries based on predicted abundance.  Processors make long term and short term investment plans in staffing and capacity based upon forecasts. However the methods used to make these predictions rely on methods that are decades old and generally do not go beyond forward projection from age structured models.
+
+
+The past two decades have seen explosive progress in the ability of “computer age” statistical methods to make accurate predictions [@efron2016], revolutionizing fields such as financial modeling, weather forecasting, and medicine. However, these methods remain relatively unused in ecological forecasting, particularly in an applied setting [@peters2014]. We use the ecologically and economically vital sockeye salmon populations of Bristol Bay, Alaska, to demonstrate both the potential and limitations of computer age statistical methods in ecological forecasting, by directly comparing the realized predictive performance of a wide range of applicable statistical forecasting tools.
 
 The commercial salmon fishery in Bristol Bay, Alaska is the single largest sockeye salmon (*Oncorhynchus nerka*) fishery in the world [@steiner2011], with an estimated wholesale value of the Bristol Bay commercial sockeye harvest was $390 million USD in 2010 and representing approximately one-sixth of the total value of all US seafood exports [@knapp2013]. Salmon returning to Bristol Bay also provide vital food security for subsistence-dependent Alaskan communities, and critical vectors of marine-derived nutrients that support vibrant freshwater habitats [@naiman2002; @schindler2003]. Sustainable management of the Bristol Bay salmon fishery is dependent upon accuracy of preseason forecasts for salmon abundance, which inform development and implementation of inseason harvest strategies and successful prosecution of subsistence and commercial fisheries. Preseason forecasts are also important for planning by the processing industry as a basis for identifying the appropriate level of supplies, equipment, and personnel necessary to process the annual harvest, and directly influence the profitability and efficiency of the salmon industry as a whole. 
 

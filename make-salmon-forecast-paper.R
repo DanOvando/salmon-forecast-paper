@@ -10,7 +10,7 @@ functions <- list.files(here::here("functions"))
 
 purrr::walk(functions, ~ source(here::here("functions", .x)))
 
-prep_run(results_name = "v0.5.4", results_description = "draft publication with boost tree improvements loo starting in 1990 on abalone",
+prep_run(results_name = "v0.5.5", results_description = "draft publication with boost tree improvements loo starting in 1990 on abalone",
          first_year = 1990, 
          last_year = 2019,
          min_year = 1963, 
@@ -22,15 +22,15 @@ message(
 
 options(dplyr.summarise.inform = FALSE)
 
-run_edm_forecast <- FALSE
+run_edm_forecast <- TRUE
 
-run_dlm_forecast <- FALSE
+run_dlm_forecast <- TRUE
 
-run_ml_forecast <- FALSE
+run_ml_forecast <- TRUE
 
-fit_statistical_ensemble <- FALSE
+fit_statistical_ensemble <- TRUE
 
-run_importance <- FALSE
+run_importance <- TRUE
 
 knit_manuscript <- TRUE
 
