@@ -22,13 +22,13 @@ message(
 
 options(dplyr.summarise.inform = FALSE)
 
-run_edm_forecast <- TRUE
+run_edm_forecast <- FALSE
 
-run_dlm_forecast <- TRUE
+run_dlm_forecast <- FALSE
 
-run_ml_forecast <- TRUE
+run_ml_forecast <- FALSE
 
-fit_statistical_ensemble <- TRUE
+fit_statistical_ensemble <- FALSE
 
 run_importance <- TRUE
 
@@ -1083,6 +1083,8 @@ yearly_system_resid_struggles_figure <- system_forecast %>%
   # scale_color_discrete(name = '')
 
 yearly_system_resid_struggles_figure
+
+
 # VOI plot ----------------------------------------------------------------
 
     if (file.exists(file.path(results_dir, "next_forecast.rds"))){
@@ -1112,6 +1114,7 @@ yearly_system_resid_struggles_figure
           age_group = str_replace(age_group, "\\.","_"),
           age_group= forcats::fct_relevel(age_group, c("1_2","1_3","2_2","2_3"))) %>% 
         select(year, system, age_group, forecast, model) %>% 
+        mutate(forecast = pmax(0, forecast)) %>% 
         bind_rows(forecasts %>% select(year, system, age_group, forecast, model)) %>% 
         group_by(system, year, model) %>%
         mutate(forecast = forecast) %>% 
@@ -1120,7 +1123,8 @@ yearly_system_resid_struggles_figure
         arrange(year, age_group) %>% 
         pivot_wider(names_from = age_group, values_from = forecast) %>% 
         select(dplyr::everything(),-Totals, Totals) %>% 
-        arrange(desc(year))
+        arrange(desc(year)) %>% 
+        filter(year == 2020)
       
       # raw_forecast_table %>%
       #   pivot_longer(contains("_"), names_to = "age_group", values_to = "forecast") %>%

@@ -558,7 +558,7 @@ if (fit_parsnip_models == TRUE){
           ungroup() %>% 
           # slice(15) %>% 
           # filter(model_type == "rand_forest") %>%
-          sample_n(20) %>%
+          # sample_n(20) %>%
           mutate(pred = future_pmap(
             list(
             pred_system = pred_system,
