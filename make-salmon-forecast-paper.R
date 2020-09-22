@@ -31,7 +31,7 @@ run_dlm_forecast <- FALSE
 
 run_ml_forecast <- FALSE
 
-fit_statistical_ensemble <- TRUE
+fit_statistical_ensemble <- FALSE
 
 run_importance <- TRUE
 
@@ -1286,6 +1286,13 @@ if (file.exists(file.path(results_dir, "next_forecast.rds"))) {
     group_by(model_type) %>%
     summarise(forecast = sum(pred))
   
+  tmp <- age_system_performance %>% 
+    filter(model %in% c("boost_tree","rand_forest")) %>% 
+    group_by(age_group,system) %>% 
+    filter(srmse == min(srmse)) %>% 
+    rename(best_model = model) %>% 
+    select(system,age_group, best_model)
+  
   raw_forecast_table <- latest_forecast %>%
     ungroup() %>%
     filter(ret_yr == max(ret_yr)) %>%
@@ -1303,9 +1310,14 @@ if (file.exists(file.path(results_dir, "next_forecast.rds"))) {
     select(year, system, age_group, forecast, model) %>%
     mutate(forecast = pmax(0, forecast)) %>%
     bind_rows(forecasts %>% select(year, system, age_group, forecast, model)) %>%
-    group_by(system, year, model) %>%
-    mutate(forecast = forecast) %>%
-    mutate(Totals = sum(forecast)) %>%
+    left_join(tmp, by = c("system","age_group")) %>% 
+    group_by(system, age_group, year) %>% 
+    filter(model == best_model) %>% 
+    select(-best_model,-model) %>% 
+    group_by(system, year) %>%
+    mutate(forecast = forecast / 1000) %>%
+    mutate(Totals = sum(forecast),
+           age_group = str_replace_all(age_group, "_",".")) %>%
     ungroup() %>%
     arrange(year, age_group) %>%
     pivot_wider(names_from = age_group, values_from = forecast) %>%
@@ -1330,21 +1342,23 @@ if (file.exists(file.path(results_dir, "next_forecast.rds"))) {
   
   total_vars <-
     total_vars[str_detect(total_vars, "(\\.)|(Totals)")]
-  
+
+
   forecast_table <- raw_forecast_table %>%
-    filter(model %in% c("rand_forest", "boost_tree"), year == 2020) %>%
-    group_by(year, model) %>%
+    filter(year == 2020) %>%
+    ungroup() %>% 
+    group_by(year) %>%
     gt(rowname_col = "system") %>%
     summary_rows(
       groups = TRUE,
       columns = vars(total_vars) ,
       fns = list(Totals = "sum"),
       formatter = fmt_number,
-      decimals = 0,
+      decimals = 2,
       use_seps = TRUE
       
     ) %>%
-    gt::fmt_number(columns = total_vars, decimals = 0) %>%
+    gt::fmt_number(columns = total_vars, decimals = 2) %>%
     gt::tab_spanner(label = "Age Group",
                     columns = (total_vars[total_vars != "Totals"])) %>%
     gt::tab_style(

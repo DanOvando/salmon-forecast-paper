@@ -171,6 +171,10 @@ benchmarks <- system_performance %>%
   select(model, system, rmse) %>% 
   pivot_wider(names_from = model, values_from = "rmse")
 
+age_benchmarks <- age_performance %>% 
+  filter(model == "fri" | model == "lag") %>% 
+  select(model, age_group, rmse) %>% 
+  pivot_wider(names_from = model, values_from = "rmse")
 
 
 sys_performers <- system_performance %>% 
@@ -178,7 +182,7 @@ sys_performers <- system_performance %>%
   group_by(system) %>% 
   filter(srmse == min(srmse))
 
-comp_age_improvement <- sys_performers %>% 
+comp_sys_improvement <- sys_performers %>% 
   select(model, system, rmse) %>% 
   left_join(benchmarks, by = "system") %>% 
   ungroup() %>% 
@@ -187,16 +191,79 @@ comp_age_improvement <- sys_performers %>%
             max_imp_on_fri = max(-(rmse / fri - 1)),
             imp_on_lag =  -mean(rmse / lag - 1))
 
+tmp <- sys_performers %>% 
+  select(model, system, rmse) %>% 
+  left_join(benchmarks, by = "system") %>% 
+  ungroup() %>% 
+  mutate(imp_on_fri = -(rmse / fri - 1),
+            min_imp_on_fri = (-(rmse / fri - 1)),
+            max_imp_on_fri = (-(rmse / fri - 1)),
+            imp_on_lag =  -(rmse / lag - 1))
+
 age_performers <- age_performance %>% 
   filter(!model %in% c("fri", "boost_tree_ensemble")) %>% 
   group_by(age_group) %>% 
   filter(srmse == min(srmse))
 
+tmp2 <- age_performers %>% 
+  select(model, age_group, rmse) %>% 
+  left_join(age_benchmarks, by = "age_group") %>% 
+  ungroup() %>% 
+  mutate(imp_on_fri = -(rmse / fri - 1),
+            min_imp_on_fri = (-(rmse / fri - 1)),
+            max_imp_on_fri = (-(rmse / fri - 1)),
+            imp_on_lag =  -(rmse / lag - 1))
+
+a = tmp %>%
+  ggplot(aes(reorder(system, -imp_on_fri), imp_on_fri, fill = model)) +
+  geom_hline(aes(yintercept = 0)) +
+  geom_col(color = "black") +
+  scale_y_percent(name = "% Improvement on Traditional FRI Methods") +
+  scale_x_discrete(name = '')+
+  fishualize::scale_fill_fish_d(name = 'Best Model', option = "Trimma_lantana") + 
+  theme(axis.text.x = element_text(size = 10),
+        axis.text.y = element_text(size = 14)) 
+
+ggsave( "rep_fig_1.pdf",a, device = cairo_pdf, width = 6, height = 4)
+
+b = tmp2 %>%
+  mutate(age_group = str_replace_all(age_group,"_",".")) %>% 
+  ggplot(aes(reorder(age_group, -imp_on_fri), imp_on_fri, fill = model)) +
+  geom_hline(aes(yintercept = 0)) +
+  geom_col(color = "black") +
+  scale_y_percent(name = "% Improvement on Traditional FRI Methods") +
+  scale_x_discrete(name = '')+
+  fishualize::scale_fill_fish_d(name = 'Best Model', option = "Trimma_lantana") + 
+  theme(axis.text.x = element_text(size = 10),
+        axis.text.y = element_text(size = 14)) 
+
+ggsave( "rep_fig_2.pdf",b, device = cairo_pdf, width = 6, height = 4)
+
+
+
+d <- total_forecast %>%
+  filter(model %in% c("boost_tree", "fri")) %>%
+  group_by(year) %>%
+  mutate(observed = mean(observed)) %>%
+  pivot_wider(names_from = "model", values_from = "forecast") %>%
+  ggplot() +
+  geom_hline(aes(yintercept = 0)) +
+  geom_area(aes(year, observed),fill = "lightgrey") +
+  geom_point(aes(year, boost_tree, fill = "boost_tree"), shape = 21, size = 4,alpha = 0.9) +
+  geom_point(aes(year, fri, fill = "UW-FRI"), shape = 21, size = 4,alpha =0.9) + 
+  fishualize::scale_fill_fish_d(name = '', option = "Trimma_lantana") + 
+  scale_y_continuous(name = "Total Returns") + 
+  scale_x_continuous(name = 'Year') + 
+    theme(axis.text.x = element_text(size = 10),
+        axis.text.y = element_text(size = 14)) 
+
+
+ggsave( "rep_fig_3.pdf",d, device = cairo_pdf, width = 6, height = 4)
 
 
 ```
 
-Management of Bristol Bay sockeye salmon is organized at the river system level, and so forecasts at this resolution are critical for management and harvest plans.For each river system, we selected the model with the lowest SRMSE over the years 2000 to 2019 as the model of choice for that river system. On average the best-performing computer-age method reduced the root mean squared error in pre-season run forecasts at the river system level by `r percent(comp_age_improvement$imp_on_fri)`, with a minimum improvement of  `r percent(comp_age_improvement$min_imp_on_fri)` and a maximum of `r percent(comp_age_improvement$max_imp_on_fri)`, relative to the performance of this historic published pre-season forecasts. This represents a meaningful improvement in forecast skill for the management of Bristol Bay sockeye salmon. 
+Management of Bristol Bay sockeye salmon is organized at the river system level, and so forecasts at this resolution are critical for management and harvest plans.For each river system, we selected the model with the lowest SRMSE over the years 2000 to 2019 as the model of choice for that river system. On average the best-performing computer-age method reduced the root mean squared error in pre-season run forecasts at the river system level by `r percent(comp_sys_improvement$imp_on_fri)`, with a minimum improvement of  `r percent(comp_sys_improvement$min_imp_on_fri)` and a maximum of `r percent(comp_sys_improvement$max_imp_on_fri)`, relative to the performance of the historic published pre-season forecasts. This represents a meaningful improvement in forecast skill for the management of Bristol Bay sockeye salmon. 
 
 River systems varied in both the lowest SRMSE achieved and in the model that produced the best performance. At least one model was able to out-perform or equal a simple lag-1 benchmark model in each of the river systems, with the `r  sys_performers$model[sys_performers$srmse == min(sys_performers$srmse)]` model achieving a SRMSE of `r prettyNum(min(sys_performers$srmse), digits = 2)` at the top end in the `r sys_performers$system[sys_performers$srmse == min(sys_performers$srmse)]` river system, and the `r sys_performers$model[sys_performers$srmse == max(sys_performers$srmse)]` model providing only marginal improvement over a lag-1 model with a SRMSE of `r prettyNum(max(sys_performers$srmse), digits = 2)` in the `r sys_performers$system[sys_performers$srmse == max(sys_performers$srmse)]` river system. Of all the candidate models explored, only the dlm, boost_tree, and rand_forest models were selected as the best performer in at least one river system (Fig.\@ref(fig:sys-forecast)). 
   
