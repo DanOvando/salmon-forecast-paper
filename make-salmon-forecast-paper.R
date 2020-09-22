@@ -35,7 +35,7 @@ fit_statistical_ensemble <- FALSE
 
 run_importance <- TRUE
 
-knit_manuscript <- TRUE
+knit_manuscript <- FALSE
 
 scalar <- 1000
 
@@ -804,6 +804,7 @@ age_return_plot <- salmon_data %>%
   filter(system %in% top_systems) %>%
   group_by(year, age_group) %>%
   summarise(ret = sum(ret)) %>%
+  mutate(age_group = str_replace_all(age_group, "_",".")) %>% 
   ggplot(aes(year, ret, fill = (age_group))) +
   geom_area(alpha = 1) +
   scale_y_continuous(name = "", expand = expansion()) +
@@ -833,6 +834,7 @@ age_system_return_plot <- salmon_data %>%
   filter(system %in% top_systems) %>%
   group_by(year, age_group, system) %>%
   summarise(ret = sum(ret)) %>%
+  mutate(age_group = str_replace_all(age_group, "_",".")) %>% 
   ggplot(aes(year, ret, fill = (age_group))) +
   geom_area(alpha = 1) +
   scale_y_continuous(name = "", expand = expansion()) +
@@ -934,7 +936,9 @@ next_best <- age_performance %>%
 top_age_forecast <- age_forecast %>%
   mutate(combo = paste(age_group, model, sep = "_")) %>%
   filter(combo %in% top_models$combo) %>%
-  left_join(next_best, by = c("model", "age_group"))
+  left_join(next_best, by = c("model", "age_group")) %>% 
+  mutate(age_group = str_replace_all(age_group, "_","."))
+  
 
 
 age_forecast_srmse <- top_age_forecast %>%
@@ -942,8 +946,8 @@ age_forecast_srmse <- top_age_forecast %>%
   summarise(max = max(observed, forecast),
             srmse = unique(srmse))
 
-
 age_forecast_figure <- top_age_forecast %>%
+  # mutate(age_group = str_replace_all(age_group, "_",".")) %>% 
   ggplot() +
   geom_area(aes(year, observed), fill = "darkgray") +
   geom_text(
@@ -1253,8 +1257,9 @@ yearly_system_resid_struggles_figure <- system_forecast %>%
   mutate(scaled_resid = scale(resid)) %>%
   filter(!model %in% c("boost_tree_ensemble", "fri")) %>%
   ggplot() +
-  geom_ribbon(aes(year, ymin = 1, ymax = 4), fill = "tomato", alpha = 0.5) +
-  geom_ribbon(aes(year, ymin = -4, ymax = -1), fill = "tomato", alpha = 0.5) +
+  geom_hline(yintercept = c(-1,1), linetype = 2) +
+  geom_ribbon(aes(year, ymin = 1, ymax = 4), fill = "darkgrey", alpha = 0.5) +
+  geom_ribbon(aes(year, ymin = -4, ymax = -1), fill = "darkgrey", alpha = 0.5) +
   geom_hline(aes(yintercept = 0)) +
   geom_line(aes(year, scaled_resid, color = model)) +
   facet_wrap( ~ system) +
