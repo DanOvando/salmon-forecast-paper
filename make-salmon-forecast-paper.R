@@ -11,7 +11,7 @@ functions <- list.files(here::here("functions"))
 purrr::walk(functions, ~ source(here::here("functions", .x)))
 
 prep_run(
-  results_name = "v0.5.4",
+  results_name = "v1.0.0.9000",
   results_description = "draft publication with boost tree improvements loo starting in 1990 on abalone",
   first_year = 1990,
   last_year = 2019,
@@ -35,7 +35,7 @@ fit_statistical_ensemble <- FALSE
 
 run_importance <- TRUE
 
-knit_manuscript <- FALSE
+knit_manuscript <- TRUE
 
 scalar <- 1000
 
@@ -837,7 +837,7 @@ age_system_return_plot <- salmon_data %>%
   mutate(age_group = str_replace_all(age_group, "_",".")) %>% 
   ggplot(aes(year, ret, fill = (age_group))) +
   geom_area(alpha = 1) +
-  scale_y_continuous(name = "", expand = expansion()) +
+  scale_y_continuous(name = "Returns (Millions of Salmon)", expand = expansion()) +
   scale_x_continuous(name = 'Year') +
   scale_fill_viridis_d(option = "plasma", name = 'Age Group') +
   labs(subtitle = "C") +
@@ -1112,6 +1112,7 @@ age_system_performance_figure <-  age_system_performance %>%
     fface = ifelse(model == "ml", "italic", "plain"),
     model = fct_recode(model, rmean = "runmean")
   ) %>%
+  mutate(age_group = str_replace_all(age_group, "_",".")) %>% 
   ggplot(aes(system, age_group, label = model, color = scaled_rmse)) +
   geom_text(aes(fontface = fface, size = sqrt(p_ret))) +
   scale_color_gradient(
@@ -1139,6 +1140,7 @@ age_system_performance_figure
 
 srmse_summary_figure <- age_system_performance %>%
   filter(model != "lag") %>%
+  mutate(age_group = str_replace_all(age_group, "_",".")) %>% 
   ggplot(aes(age_group, model, fill = srmse)) +
   geom_tile(color = "black") +
   facet_grid( ~ system,
