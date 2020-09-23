@@ -31,11 +31,11 @@ run_dlm_forecast <- FALSE
 
 run_ml_forecast <- FALSE
 
-fit_statistical_ensemble <- TRUE
+fit_statistical_ensemble <- FALSE
 
 run_importance <- TRUE
 
-knit_manuscript <- TRUE
+knit_manuscript <- FALSE
 
 scalar <- 1000
 
@@ -804,6 +804,7 @@ age_return_plot <- salmon_data %>%
   filter(system %in% top_systems) %>%
   group_by(year, age_group) %>%
   summarise(ret = sum(ret)) %>%
+  mutate(age_group = str_replace_all(age_group, "_",".")) %>% 
   ggplot(aes(year, ret, fill = (age_group))) +
   geom_area(alpha = 1) +
   scale_y_continuous(name = "", expand = expansion()) +
@@ -833,6 +834,7 @@ age_system_return_plot <- salmon_data %>%
   filter(system %in% top_systems) %>%
   group_by(year, age_group, system) %>%
   summarise(ret = sum(ret)) %>%
+  mutate(age_group = str_replace_all(age_group, "_",".")) %>% 
   ggplot(aes(year, ret, fill = (age_group))) +
   geom_area(alpha = 1) +
   scale_y_continuous(name = "", expand = expansion()) +
@@ -934,7 +936,9 @@ next_best <- age_performance %>%
 top_age_forecast <- age_forecast %>%
   mutate(combo = paste(age_group, model, sep = "_")) %>%
   filter(combo %in% top_models$combo) %>%
-  left_join(next_best, by = c("model", "age_group"))
+  left_join(next_best, by = c("model", "age_group")) %>% 
+  mutate(age_group = str_replace_all(age_group, "_","."))
+  
 
 
 age_forecast_srmse <- top_age_forecast %>%
@@ -942,8 +946,8 @@ age_forecast_srmse <- top_age_forecast %>%
   summarise(max = max(observed, forecast),
             srmse = unique(srmse))
 
-
 age_forecast_figure <- top_age_forecast %>%
+  # mutate(age_group = str_replace_all(age_group, "_",".")) %>% 
   ggplot() +
   geom_area(aes(year, observed), fill = "darkgray") +
   geom_text(
@@ -1253,8 +1257,9 @@ yearly_system_resid_struggles_figure <- system_forecast %>%
   mutate(scaled_resid = scale(resid)) %>%
   filter(!model %in% c("boost_tree_ensemble", "fri")) %>%
   ggplot() +
-  geom_ribbon(aes(year, ymin = 1, ymax = 4), fill = "tomato", alpha = 0.5) +
-  geom_ribbon(aes(year, ymin = -4, ymax = -1), fill = "tomato", alpha = 0.5) +
+  geom_hline(yintercept = c(-1,1), linetype = 2) +
+  geom_ribbon(aes(year, ymin = 1, ymax = 4), fill = "darkgrey", alpha = 0.5) +
+  geom_ribbon(aes(year, ymin = -4, ymax = -1), fill = "darkgrey", alpha = 0.5) +
   geom_hline(aes(yintercept = 0)) +
   geom_line(aes(year, scaled_resid, color = model)) +
   facet_wrap( ~ system) +
@@ -1286,6 +1291,13 @@ if (file.exists(file.path(results_dir, "next_forecast.rds"))) {
     group_by(model_type) %>%
     summarise(forecast = sum(pred))
   
+  tmp <- age_system_performance %>% 
+    filter(model %in% c("boost_tree","rand_forest")) %>% 
+    group_by(age_group,system) %>% 
+    filter(srmse == min(srmse)) %>% 
+    rename(best_model = model) %>% 
+    select(system,age_group, best_model)
+  
   raw_forecast_table <- latest_forecast %>%
     ungroup() %>%
     filter(ret_yr == max(ret_yr)) %>%
@@ -1303,9 +1315,14 @@ if (file.exists(file.path(results_dir, "next_forecast.rds"))) {
     select(year, system, age_group, forecast, model) %>%
     mutate(forecast = pmax(0, forecast)) %>%
     bind_rows(forecasts %>% select(year, system, age_group, forecast, model)) %>%
-    group_by(system, year, model) %>%
-    mutate(forecast = forecast) %>%
-    mutate(Totals = sum(forecast)) %>%
+    left_join(tmp, by = c("system","age_group")) %>% 
+    group_by(system, age_group, year) %>% 
+    filter(model == best_model) %>% 
+    select(-best_model,-model) %>% 
+    group_by(system, year) %>%
+    mutate(forecast = forecast / 1000) %>%
+    mutate(Totals = sum(forecast),
+           age_group = str_replace_all(age_group, "_",".")) %>%
     ungroup() %>%
     arrange(year, age_group) %>%
     pivot_wider(names_from = age_group, values_from = forecast) %>%
@@ -1330,21 +1347,23 @@ if (file.exists(file.path(results_dir, "next_forecast.rds"))) {
   
   total_vars <-
     total_vars[str_detect(total_vars, "(\\.)|(Totals)")]
-  
+
+
   forecast_table <- raw_forecast_table %>%
-    filter(model %in% c("rand_forest", "boost_tree"), year == 2020) %>%
-    group_by(year, model) %>%
+    filter(year == 2020) %>%
+    ungroup() %>% 
+    group_by(year) %>%
     gt(rowname_col = "system") %>%
     summary_rows(
       groups = TRUE,
       columns = vars(total_vars) ,
       fns = list(Totals = "sum"),
       formatter = fmt_number,
-      decimals = 0,
+      decimals = 2,
       use_seps = TRUE
       
     ) %>%
-    gt::fmt_number(columns = total_vars, decimals = 0) %>%
+    gt::fmt_number(columns = total_vars, decimals = 2) %>%
     gt::tab_spanner(label = "Age Group",
                     columns = (total_vars[total_vars != "Totals"])) %>%
     gt::tab_style(
