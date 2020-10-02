@@ -1114,7 +1114,7 @@ age_system_performance_figure <-  age_system_performance %>%
   ) %>%
   mutate(age_group = str_replace_all(age_group, "_",".")) %>% 
   ggplot(aes(system, age_group, label = model, color = scaled_rmse)) +
-  geom_text(aes(fontface = fface, size = sqrt(p_ret))) +
+  geom_text(aes(fontface = fface), size = 4) +
   scale_color_gradient(
     low = "tomato",
     high = "steelblue",
@@ -1130,7 +1130,7 @@ age_system_performance_figure <-  age_system_performance %>%
   ) +
   scale_x_discrete(name = '') +
   scale_y_discrete(name = '') +
-  scale_size(range = c(4, 12), guide = FALSE) +
+  # scale_size(range = c(4, 12), guide = FALSE) +
   theme(legend.position = "top") +
   labs(caption = "Text indicates best performing model from 2000-2019")
 
