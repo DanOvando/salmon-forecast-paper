@@ -14,7 +14,7 @@ output:
   bookdown::word_document2:
     reference_docx: template.docx
 bibliography: "../references.bib"
-csl: nature.csl
+csl: pnas.csl
 params: 
   results_name: ["v1.0.0.9000"]
 linkcolor: blue
@@ -421,6 +421,8 @@ Materials can be accessed at www.github.com/danovando/salmon-forecast-paper
 
 ::: {#refs}
 :::
+
+
 
 # Supplementary Information
 
