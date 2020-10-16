@@ -16,10 +16,12 @@ output:
 bibliography: "../references.bib"
 csl: pnas.csl
 params: 
-  results_name: ["v1.0.1.9000"]
+  results_name: ["v1.0.0.9000"]
 linkcolor: blue
 toc: true
 header-includes:
+  # - \RequirePackage{totcount,xpatch}
+  # - \usepackage{totcount}
   - \usepackage{setspace}\doublespacing
   - \usepackage{lineno}\linenumbers
   # - \usepackage{draftwatermark}
@@ -27,6 +29,7 @@ header-includes:
   # - \SetWatermarkScale{1}
 abstract: |
   Modern computational tools such as machine learning have transformed predictive fields from advertising to weather forecasting. However, these methods are underutilized for managing ecological systems. Salmon are a natural, cultural, and economic keystone of Alaska, and accurate pre-season forecasts of the numbers of sockeye salmon (*Oncorhynchus nerka*), that will return to the river systems of Bristol Bay play an important role in management and harvesting decisions. These predictions are challenging though, given the complex set of dynamic factors that affect salmon. We use data from the salmon populations of Bristol Bay, Alaska, together with a suite of modern forecasting tools, to identify the frontiers in forecast accuracy possible given currently available data. By leveraging dynamic environmental information and correlations between salmon populations, we were able to reduce forecast error by on average 19%. Our results demonstrate the utility and limitations of modern computational tools for applied management of natural resources, even when confronted with the short time series and observation error common in ecological systems.
+  
 ---
 
 ```{r setup, include=FALSE}
@@ -89,8 +92,10 @@ Juneau, AK 99801
 
 ^c^NOAA Fisheries Southwest Fisheries Science Center
 8901 La Jolla Shores Dr, La Jolla, CA 92037
+
 ## Corresponding Author{-}
 *Correspondence should be addressed to Daniel Ovando at [danovan\@uw.edu](mailto:danovan@uw.edu){.email}
+
 
 ## Classification{-}
 Biological Sciences > Population Biology
@@ -463,11 +468,16 @@ All data, code, and package dependencies needed to fully reproduce our results a
 
 # Supplementary Information
 
+
+\renewcommand{\thefigure}{S\arabic{figure}}
+
+\setcounter{figure}{0}
+
 ```{r srmse-fig, fig.cap="Scaled root mean squared error (SRMSE) for each model type (rows) by age group and system (columns)."}
 srmse_summary_figure + 
   theme(axis.text.x = element_text(size = 6))
 ```
 
-```{r, fig.cap="Best performing model in terms of scaled root mean squared error (SRMSE) for each age group and river system. Color indicates the percent improvement in SRMSE between the best performing model and the historic published Fisheries Research Institute (FRI) forecasts."}
+```{r srmse-fig-two, fig.cap="Best performing model in terms of scaled root mean squared error (SRMSE) for each age group and river system. Color indicates the percent improvement in SRMSE between the best performing model and the historic published Fisheries Research Institute (FRI) forecasts."}
 age_system_performance_figure
 ```
