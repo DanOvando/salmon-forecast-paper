@@ -35,7 +35,7 @@ fit_statistical_ensemble <- FALSE
 
 run_importance <- TRUE
 
-knit_manuscript <- TRUE
+knit_manuscript <- FALSE
 
 scalar <- 1000
 
