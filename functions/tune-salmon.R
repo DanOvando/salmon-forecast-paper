@@ -10,6 +10,8 @@
 #'
 tune_salmon <- function(model_type = "rand_forest",salmon_recipe, log_returns = FALSE,...) {
   
+  options(dplyr.summarise.inform = FALSE)
+  
   arguments <- list(...)
   
   analysis_split <-   rsample::analysis(arguments$splits) %>%

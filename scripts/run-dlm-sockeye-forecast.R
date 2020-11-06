@@ -56,7 +56,7 @@ start.year <- min_year
 
 # load data ---------------------------------------------------------------
 
-dat <- read.csv(here::here("data", "2019.csv"), stringsAsFactors = FALSE) 
+dat <- read.csv(here::here("data", paste0(return_table_year,".csv")), stringsAsFactors = FALSE) 
 
 # Source Model Script ------------------------------------------------------
 source(here::here("functions","fit-dlm-model.R"))

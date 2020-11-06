@@ -60,7 +60,7 @@ age_groups <- 4 #number of top age groups to include
 
 #------------------------------------------------------------------------------
 #Load and process Data
-dat <- read.csv(here::here("data", "2019.csv"), stringsAsFactors = FALSE) 
+dat <- read.csv(here::here("data", paste0(return_table_year,".csv")), stringsAsFactors = FALSE) 
 # dat <- read.csv("data/2019.csv", stringsAsFactors = F)
 
 #add ages

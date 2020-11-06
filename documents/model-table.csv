@@ -1,0 +1,9 @@
+﻿Model Name,Description,Machine Learning Model?
+Boosted Regression Trees (boost_tree),An ensemble of boosted regression trees,Yes
+Random Forest (rand_forest),An ensemble of regression trees,Yes
+Recurrent Neural Network (rnn),A neural network with a memory component implemented through recurrent layers,Yes
+Dynamic Linear Model (dlm),Sibling regression with dynamic components,No
+Simplex,Builds forecasts based on relationships between lagged returns,No
+S-map,Builds forecasts based on relationships between lagged returns,No
+Lag-1 (lag),Forecast next year equal to observed returns last year,No
+Ensemble,A boosted regression tree ensemble made of other candidate models,Yes

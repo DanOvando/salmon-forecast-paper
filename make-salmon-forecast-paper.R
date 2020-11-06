@@ -10,11 +10,13 @@ functions <- list.files(here::here("functions"))
 
 purrr::walk(functions, ~ source(here::here("functions", .x)))
 
+return_table_year <- 2020
+
 prep_run(
   results_name = "v1.0.0.9000",
   results_description = "draft publication with boost tree improvements loo starting in 1990 on abalone",
   first_year = 1990,
-  last_year = 2019,
+  last_year = 2020,
   min_year = 1963,
   eval_year = 2000
 )
@@ -29,9 +31,9 @@ run_edm_forecast <- FALSE
 
 run_dlm_forecast <- FALSE
 
-run_ml_forecast <- FALSE
+run_ml_forecast <- TRUE
 
-fit_statistical_ensemble <- FALSE
+fit_statistical_ensemble <- TRUE
 
 run_importance <- TRUE
 

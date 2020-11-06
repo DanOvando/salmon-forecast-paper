@@ -5,6 +5,7 @@
 # purpose: develop and test machine learning approaches to salmon forecasting
 #
 
+options(dplyr.summarise.inform = FALSE)
 
 # load ------------------------------------------------------------------------
 
@@ -66,11 +67,18 @@ stride <- 4 #stride for errdaap data
 
 weight_returns <- FALSE
 
-cores <- parallel::detectCores()/2 - 2
+cores <- parallel::detectCores()/3
 
-future_plan <- future::plan(future::multiprocess, workers = cores)
 
-on.exit(plan(future_plan), add = TRUE)
+future::plan(future::multisession, workers = cores)
+
+# plan(future_plan)
+# 
+# future_plan <- future::plan(future::multiprocess, workers = cores)
+# 
+# plan(future_plan)
+
+# on.exit(plan(future_plan), add = TRUE)
 
 trees <- 1000
 
@@ -89,13 +97,13 @@ min_lon <- -178
 
 max_lon <- -156
 
-max_year <- 2019
+max_year <- return_table_year
 
 # load data ---------------------------------------------------------------
 
 
 
-data <- read_csv(here::here("data", paste0(last_year, ".csv"))) %>%
+data <- read.csv(here::here("data", paste0(return_table_year,".csv")), stringsAsFactors = FALSE) %>% 
   janitor::clean_names() %>%
   mutate(age_group = paste(fw_age, o_age, sep = "."))
 
@@ -170,7 +178,6 @@ pink_data <- partitions %>%
 
 
 # filter data ------------------------------------------------------------------
-
 data <- data %>%
   filter(ret_yr >= min_year,
          system != "Alagnak", system != "Togiak") # getting rid of alagnak due to problems in data, apparently sporadic observation tower?
