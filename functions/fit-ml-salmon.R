@@ -19,7 +19,8 @@ fit_ml_salmon <- function(dep_age,
                           assess = 3,
                           factor_years = FALSE,
                           produce = "summary",
-                          forecast = TRUE) {
+                          forecast = TRUE,
+                          p_done = "who knows how close to") {
   # message(paste0("Running ", model_type))
   
   options(dplyr.summarise.inform = FALSE)
@@ -503,16 +504,17 @@ fit_ml_salmon <- function(dep_age,
   # a <- Sys.time()
   # fplan <- future::plan(future::multiprocess, workers = 2)
   
-  future::plan(future::multisession, workers = 2)
+  # future::plan(future::multisession, workers = 2)
   
-  # on.exit(plan(fplan), add = TRUE)
+  # on.exit(plan(future::sequential), add = TRUE)
   
   tuning_fit <- future_pmap(
     tune_pars,
     tune_salmon,
     model_type = model_type,
     salmon_recipe = salmon_recipe,
-    log_returns = log_returns
+    log_returns = log_returns,
+    .progress = TRUE
   )
   
   tune_grid$tuning_fit <- tuning_fit
@@ -740,6 +742,8 @@ fit_ml_salmon <- function(dep_age,
       list(salmon_data = salmon_data, trained_model = trained_model)
     
   }
+  
+  message(paste0(p_done," done"))
   
   return(out)
   

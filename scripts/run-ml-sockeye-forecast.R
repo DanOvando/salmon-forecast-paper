@@ -67,8 +67,7 @@ stride <- 4 #stride for errdaap data
 
 weight_returns <- FALSE
 
-cores <- parallel::detectCores()/3
-
+cores <- parallel::detectCores()-4
 
 future::plan(future::multisession, workers = cores)
 
@@ -563,11 +562,14 @@ if (fit_parsnip_models == TRUE){
         set.seed(42)
         loo_preds <- looframe %>%
           ungroup() %>% 
+          mutate(p_done = 1:nrow(.)) %>% 
+          mutate(p_done = percent(p_done / length(p_done))) %>% 
           # slice(15) %>% 
           # filter(model_type == "rand_forest") %>%
           # sample_n(20) %>%
-          mutate(pred = future_pmap(
+          mutate(pred = pmap(
             list(
+            p_done = p_done,
             pred_system = pred_system,
             dep_age = dep_age,
             test_year = test_year,
@@ -589,8 +591,7 @@ if (fit_parsnip_models == TRUE){
             weight = weight_returns,
             trees = trees,
             initial_prop = 0.8,
-            forecast = FALSE,
-            .progress = TRUE))
+            forecast = FALSE))
         Sys.time() - a
       
   write_rds(loo_preds, path = file.path(results_dir, "parsnip_loo_preds.rds"))
@@ -1526,6 +1527,6 @@ forecast_table
 # gt::gtsave(forecast_table,"ml-forecast-table.tex")
 
 
-
+on.exit(future::plan("sequential"), add = TRUE)
 
 

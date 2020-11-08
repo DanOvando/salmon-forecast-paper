@@ -31,9 +31,9 @@ run_edm_forecast <- FALSE
 
 run_dlm_forecast <- FALSE
 
-run_ml_forecast <- TRUE
+run_ml_forecast <- FALSE
 
-fit_statistical_ensemble <- TRUE
+fit_statistical_ensemble <- FALSE
 
 run_importance <- TRUE
 
@@ -247,7 +247,7 @@ if (fit_statistical_ensemble) {
       ) %>%
       dials::finalize(mtry(), x = training_ensemble_data %>% select(-(1:2)))
 
-    xgboost_grid <- grid_latin_hypercube(tune_grid, size = 30)
+    xgboost_grid <- grid_latin_hypercube(tune_grid, size = 20)
 
     xgboost_model <-
       parsnip::boost_tree(
@@ -1324,15 +1324,15 @@ if (file.exists(file.path(results_dir, "next_forecast.rds"))) {
     filter(model == best_model) %>%
     select(-best_model,-model) %>%
     group_by(system, year) %>%
-    mutate(forecast = forecast / 1000) %>%
+    mutate(forecast = forecast / 1000000) %>%
     mutate(Totals = sum(forecast),
            age_group = str_replace_all(age_group, "_",".")) %>%
     ungroup() %>%
     arrange(year, age_group) %>%
     pivot_wider(names_from = age_group, values_from = forecast) %>%
     select(dplyr::everything(), -Totals, Totals) %>%
-    arrange(desc(year)) %>%
-    filter(year == 2020)
+    arrange(desc(year)) %>% 
+    filter(year == max(year))
 
   # raw_forecast_table %>%
   #   pivot_longer(contains("_"), names_to = "age_group", values_to = "forecast") %>%
@@ -1343,7 +1343,7 @@ if (file.exists(file.path(results_dir, "next_forecast.rds"))) {
   #   geom_line()
   #
   write_csv(
-    raw_forecast_table %>% mutate_if(is.numeric, round),
+    raw_forecast_table %>% mutate_if(is.numeric, round,3),
     file.path(results_dir, "raw-machine-learning-forecast-table.csv")
   )
 
@@ -1354,7 +1354,6 @@ if (file.exists(file.path(results_dir, "next_forecast.rds"))) {
 
 
   forecast_table <- raw_forecast_table %>%
-    filter(year == 2020) %>%
     ungroup() %>%
     group_by(year) %>%
     gt(rowname_col = "system") %>%
