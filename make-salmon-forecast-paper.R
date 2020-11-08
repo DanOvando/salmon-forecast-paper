@@ -10,13 +10,13 @@ functions <- list.files(here::here("functions"))
 
 purrr::walk(functions, ~ source(here::here("functions", .x)))
 
-return_table_year <- 2020
+return_table_year <- 2019
 
 prep_run(
   results_name = "v1.0.0.9000",
   results_description = "draft publication with boost tree improvements loo starting in 1990 on abalone",
   first_year = 1990,
-  last_year = 2020,
+  last_year = 2019,
   min_year = 1963,
   eval_year = 2000
 )
