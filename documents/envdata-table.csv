@@ -1,0 +1,5 @@
+﻿Data Type,Description,Dataset ID
+Sea Surface Temperature,"HadISST Average Sea Surface Temperature, 1°, Global, Monthly, 1870-present",erdHadISST
+Sea Level Pressure,"Sea Level Pressure Monthly Mean at Surface, ICOADS, 1-degree, Enhanced, Monthly, 1960-present",esrlIcoads1ge
+Upwelling,"u-wind Stress Monthly Mean at Surface, ICOADS, 1-degree, Enhanced, Monthly, 1960-present",esrlIcoads1ge
+Pacific Decadal Oscillation Index,PDO Index,http://research.jisao.washington.edu/pdo/PDO.latest

@@ -10,11 +10,13 @@ functions <- list.files(here::here("functions"))
 
 purrr::walk(functions, ~ source(here::here("functions", .x)))
 
+return_table_year <- 2020
+
 prep_run(
   results_name = "v1.0.0.9000",
   results_description = "draft publication with boost tree improvements loo starting in 1990 on abalone",
   first_year = 1990,
-  last_year = 2019,
+  last_year = 2020,
   min_year = 1963,
   eval_year = 2000
 )
@@ -245,7 +247,7 @@ if (fit_statistical_ensemble) {
       ) %>%
       dials::finalize(mtry(), x = training_ensemble_data %>% select(-(1:2)))
 
-    xgboost_grid <- grid_latin_hypercube(tune_grid, size = 30)
+    xgboost_grid <- grid_latin_hypercube(tune_grid, size = 20)
 
     xgboost_model <-
       parsnip::boost_tree(
@@ -1322,15 +1324,15 @@ if (file.exists(file.path(results_dir, "next_forecast.rds"))) {
     filter(model == best_model) %>%
     select(-best_model,-model) %>%
     group_by(system, year) %>%
-    mutate(forecast = forecast / 1000) %>%
+    mutate(forecast = forecast / 1000000) %>%
     mutate(Totals = sum(forecast),
            age_group = str_replace_all(age_group, "_",".")) %>%
     ungroup() %>%
     arrange(year, age_group) %>%
     pivot_wider(names_from = age_group, values_from = forecast) %>%
     select(dplyr::everything(), -Totals, Totals) %>%
-    arrange(desc(year)) %>%
-    filter(year == 2020)
+    arrange(desc(year)) %>% 
+    filter(year == max(year))
 
   # raw_forecast_table %>%
   #   pivot_longer(contains("_"), names_to = "age_group", values_to = "forecast") %>%
@@ -1341,7 +1343,7 @@ if (file.exists(file.path(results_dir, "next_forecast.rds"))) {
   #   geom_line()
   #
   write_csv(
-    raw_forecast_table %>% mutate_if(is.numeric, round),
+    raw_forecast_table %>% mutate_if(is.numeric, round,3),
     file.path(results_dir, "raw-machine-learning-forecast-table.csv")
   )
 
@@ -1352,7 +1354,6 @@ if (file.exists(file.path(results_dir, "next_forecast.rds"))) {
 
 
   forecast_table <- raw_forecast_table %>%
-    filter(year == 2020) %>%
     ungroup() %>%
     group_by(year) %>%
     gt(rowname_col = "system") %>%

@@ -5,6 +5,7 @@
 # purpose: develop and test machine learning approaches to salmon forecasting
 #
 
+options(dplyr.summarise.inform = FALSE)
 
 # load ------------------------------------------------------------------------
 
@@ -66,11 +67,17 @@ stride <- 4 #stride for errdaap data
 
 weight_returns <- FALSE
 
-cores <- parallel::detectCores()/2 - 2
+cores <- parallel::detectCores()-4
 
-future_plan <- future::plan(future::multiprocess, workers = cores)
+future::plan(future::multisession, workers = cores)
 
-on.exit(plan(future_plan), add = TRUE)
+# plan(future_plan)
+# 
+# future_plan <- future::plan(future::multiprocess, workers = cores)
+# 
+# plan(future_plan)
+
+# on.exit(plan(future_plan), add = TRUE)
 
 trees <- 1000
 
@@ -89,13 +96,13 @@ min_lon <- -178
 
 max_lon <- -156
 
-max_year <- 2019
+max_year <- return_table_year
 
 # load data ---------------------------------------------------------------
 
 
 
-data <- read_csv(here::here("data", paste0(last_year, ".csv"))) %>%
+data <- read.csv(here::here("data", paste0(return_table_year,".csv")), stringsAsFactors = FALSE) %>% 
   janitor::clean_names() %>%
   mutate(age_group = paste(fw_age, o_age, sep = "."))
 
@@ -170,7 +177,6 @@ pink_data <- partitions %>%
 
 
 # filter data ------------------------------------------------------------------
-
 data <- data %>%
   filter(ret_yr >= min_year,
          system != "Alagnak", system != "Togiak") # getting rid of alagnak due to problems in data, apparently sporadic observation tower?
@@ -556,11 +562,14 @@ if (fit_parsnip_models == TRUE){
         set.seed(42)
         loo_preds <- looframe %>%
           ungroup() %>% 
+          mutate(p_done = 1:nrow(.)) %>% 
+          mutate(p_done = percent(p_done / length(p_done))) %>% 
           # slice(15) %>% 
           # filter(model_type == "rand_forest") %>%
           # sample_n(20) %>%
-          mutate(pred = future_pmap(
+          mutate(pred = pmap(
             list(
+            p_done = p_done,
             pred_system = pred_system,
             dep_age = dep_age,
             test_year = test_year,
@@ -582,8 +591,7 @@ if (fit_parsnip_models == TRUE){
             weight = weight_returns,
             trees = trees,
             initial_prop = 0.8,
-            forecast = FALSE,
-            .progress = TRUE))
+            forecast = FALSE))
         Sys.time() - a
       
   write_rds(loo_preds, path = file.path(results_dir, "parsnip_loo_preds.rds"))
@@ -1519,6 +1527,6 @@ forecast_table
 # gt::gtsave(forecast_table,"ml-forecast-table.tex")
 
 
-
+on.exit(future::plan("sequential"), add = TRUE)
 
 
