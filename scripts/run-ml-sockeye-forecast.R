@@ -1171,7 +1171,7 @@ next_forecast <- forecast_fit %>%
   mutate(pred = map(pred,"salmon_data")) %>%
   unnest(cols = pred) 
 
-write_csv(next_forecast, path = file.path(results_dir,"next_loo_results.csv"))
+# write_csv(next_forecast, path = file.path(results_dir,"next_loo_results.csv"))
 
 
 

@@ -14,7 +14,7 @@ return_table_year <- 2019
 
 prep_run(
   results_name = "v1.0.0.9000",
-  results_description = "draft publication with boost tree improvements loo starting in 1990 on abalone",
+  results_description = "draft publication with boost tree improvements loo starting in 1990",
   first_year = 1990,
   last_year = 2019,
   min_year = 1963,
@@ -1302,6 +1302,32 @@ if (file.exists(file.path(results_dir, "next_forecast.rds"))) {
     rename(best_model = model) %>%
     select(system,age_group, best_model)
 
+  rawer_forecast_table <- latest_forecast %>%
+    ungroup() %>%
+    filter(ret_yr == max(ret_yr)) %>%
+    rename(
+      forecast = pred,
+      age_group = dep_age,
+      year = ret_yr,
+      model = model_type
+    ) %>%
+    ungroup() %>%
+    mutate(
+      age_group = str_replace(age_group, "\\.", "_"),
+      age_group = forcats::fct_relevel(age_group, c("1_2", "1_3", "2_2", "2_3"))
+    ) %>%
+    select(year, system, age_group, forecast, model) %>%
+    mutate(forecast = pmax(0, forecast)) %>%
+    left_join(tmp, by = c("system","age_group")) %>%
+    group_by(system, age_group, year) %>%
+    filter(model == best_model) %>%
+    select(-best_model) %>%
+    group_by(system, year, model) %>%
+    mutate(forecast = forecast / 1000000,
+           age_group = str_replace_all(age_group, "_",".")) %>%
+    ungroup() %>%
+    arrange(year, age_group)
+  
   raw_forecast_table <- latest_forecast %>%
     ungroup() %>%
     filter(ret_yr == max(ret_yr)) %>%
@@ -1345,6 +1371,11 @@ if (file.exists(file.path(results_dir, "next_forecast.rds"))) {
   write_csv(
     raw_forecast_table %>% mutate_if(is.numeric, round,3),
     file.path(results_dir, "raw-machine-learning-forecast-table.csv")
+  )
+  
+  write_csv(
+    rawer_forecast_table,
+    file.path(results_dir, "rawer-machine-learning-forecast-table.csv")
   )
 
   total_vars <- colnames(raw_forecast_table)
@@ -1498,7 +1529,7 @@ if (file.exists(file.path(results_dir, "parsnip_loo_preds.rds"))) {
 
 performance <- ls()[str_detect(ls(), "_performance$")]
 
-forecasts <-
+forecasts_run <-
   ls()[str_detect(ls(), "_forecast$") &
          !str_detect(ls(), "run_") & !str_detect(ls(), "next_forecast")]
 
@@ -1507,7 +1538,7 @@ plots <- ls()[str_detect(ls(), "(_plot)|(_figure)")]
 save(list = performance,
      file = file.path(results_dir, "performance.RData"))
 
-save(list = forecasts,
+save(list = forecasts_run,
      file = file.path(results_dir, "forecasts.RData"))
 
 save(list = plots, file = file.path(results_dir, "plots.RData"))
