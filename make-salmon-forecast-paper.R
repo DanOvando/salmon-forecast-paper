@@ -204,7 +204,7 @@ ensemble_data[is.na(ensemble_data)] <- -999
 
 ensemble_data <- ensemble_data %>%
   arrange(year)
-
+browser()
 if (fit_statistical_ensemble) {
   fit_ensemble <- function(test_year, ensemble_data) {
     message(glue::glue("fitting ensemble through {test_year}"))
@@ -237,7 +237,7 @@ if (fit_statistical_ensemble) {
       parameters(
         min_n(range(1, 10)),
         tree_depth(range(2, 15)),
-        learn_rate(range = c(log10(.1), log10(.6))),
+        learn_rate(range = c(log10(.05), log10(.6))),
         mtry(),
         loss_reduction(range(-15, log10(
           sd(training_ensemble_data$observed)
@@ -247,7 +247,7 @@ if (fit_statistical_ensemble) {
       ) %>%
       dials::finalize(mtry(), x = training_ensemble_data %>% select(-(1:2)))
 
-    xgboost_grid <- grid_latin_hypercube(tune_grid, size = 20)
+    xgboost_grid <- grid_latin_hypercube(tune_grid, size = 30)
 
     xgboost_model <-
       parsnip::boost_tree(
