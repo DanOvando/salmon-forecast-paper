@@ -465,6 +465,9 @@ That forecasts for individual river systems can be improved by treating historic
 
 In addition to the return abundance of salmon from the home and neighboring river systems, we found that oceanographic variables including mean sea surface temperature and sea surface air pressure throughout the spatial and temporal range of the oceanic phase of these salmon were informative predictors for some river systems. In addition, as reported by @connors2020, in some instances the abundance of other salmon species (chum salmon, *Oncorhynchus keta*, in western Kamchatka and northern British Columbia, pink salmon, *Oncorhynchus gorbuscha*, in Prince William sound) proved important predictors of Bristol Bay salmon return abundance (Fig.\@ref(fig:imp-plot)). Improved data on at-sea conditions and interspecies competitors may facilitate improved forecasts in the future
 
+XX Curry paragraph talking about utility of the FRI style approach, and why we shouldn't panic over historic FRI getting beat by current DLM say? XX
+
+
 ```{r imp-plot, eval = TRUE, fig.cap="Mean variable importance across all river systems of variables with importance scores greater than 0.05."}
 system_varimportance_figure
 ```
