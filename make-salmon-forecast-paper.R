@@ -33,7 +33,7 @@ run_dlm_forecast <- FALSE
 
 run_ml_forecast <- FALSE
 
-fit_statistical_ensemble <- FALSE
+fit_statistical_ensemble <- TRUE
 
 run_importance <- TRUE
 
@@ -204,7 +204,6 @@ ensemble_data[is.na(ensemble_data)] <- -999
 
 ensemble_data <- ensemble_data %>%
   arrange(year)
-browser()
 if (fit_statistical_ensemble) {
   fit_ensemble <- function(test_year, ensemble_data) {
     message(glue::glue("fitting ensemble through {test_year}"))
@@ -222,7 +221,35 @@ if (fit_statistical_ensemble) {
     training_ensemble_data <- training(ensemble_split)
 
     testing_ensemble_data <- testing(ensemble_split)
-
+    
+    training_ensemble_data <- training_ensemble_data %>% 
+      group_by(system) %>% 
+      mutate(obs_mean = mean(observed),
+             obs_sd = sd(observed)) %>% 
+      mutate(observed = (observed - obs_mean) / obs_sd) %>% 
+      ungroup()
+    
+    testing_ensemble_data <- testing_ensemble_data %>% 
+      group_by(system) %>% 
+      mutate(obs_mean = mean(observed),
+             obs_sd = sd(observed)) %>% 
+      mutate(observed = (observed - obs_mean) / obs_sd) %>% 
+      ungroup()
+    
+    
+    training_things <- training_ensemble_data %>% 
+      select(obs_mean,obs_sd)
+    
+    testing_things <- testing_ensemble_data %>% 
+      select(obs_mean,obs_sd)
+    
+    training_ensemble_data <- training_ensemble_data %>% 
+      select(-obs_mean,-obs_sd) 
+    
+    testing_ensemble_data <- testing_ensemble_data %>% 
+      select(-obs_mean,-obs_sd) 
+    
+    
     ensemble_splits <-
       rsample::group_vfold_cv(training_ensemble_data, group = year)
 
@@ -237,7 +264,7 @@ if (fit_statistical_ensemble) {
       parameters(
         min_n(range(1, 10)),
         tree_depth(range(2, 15)),
-        learn_rate(range = c(log10(.05), log10(.6))),
+        learn_rate(range = c(log10(.05), log10(.8))),
         mtry(),
         loss_reduction(range(-15, log10(
           sd(training_ensemble_data$observed)
@@ -247,7 +274,7 @@ if (fit_statistical_ensemble) {
       ) %>%
       dials::finalize(mtry(), x = training_ensemble_data %>% select(-(1:2)))
 
-    xgboost_grid <- grid_latin_hypercube(tune_grid, size = 30)
+    xgboost_grid <- grid_latin_hypercube(tune_grid, size = 25)
 
     xgboost_model <-
       parsnip::boost_tree(
@@ -272,7 +299,7 @@ if (fit_statistical_ensemble) {
 
     doParallel::stopImplicitCluster()
     set.seed(234)
-    doParallel::registerDoParallel(cores = parallel::detectCores() - 2)
+    doParallel::registerDoParallel(cores = parallel::detectCores() - 4)
 
     xgboost_tuning <- tune_grid(
       xgboost_workflow,
@@ -325,10 +352,17 @@ if (fit_statistical_ensemble) {
     #   vip::vip()
 
     training_ensemble_data$ensemble_forecast <-
-      predict(trained_ensemble, new_data = training_ensemble_data)$.pred
+      (predict(trained_ensemble, new_data = training_ensemble_data)$.pred * training_things$obs_sd) + training_things$obs_mean
 
+    training_ensemble_data$observed <-
+      (training_ensemble_data$observed * training_things$obs_sd) + training_things$obs_mean
+    
     testing_ensemble_data$ensemble_forecast <-
-      predict(trained_ensemble, new_data = testing_ensemble_data)$.pred
+      (predict(trained_ensemble, new_data = testing_ensemble_data)$.pred * testing_things$obs_sd) + testing_things$obs_mean
+    
+    testing_ensemble_data$observed <-
+      (testing_ensemble_data$observed * testing_things$obs_sd) + testing_things$obs_mean
+    
 
     ensemble_forecasts <- training_ensemble_data %>%
       bind_rows(testing_ensemble_data) %>%
