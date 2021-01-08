@@ -33,7 +33,7 @@ run_dlm_forecast <- FALSE
 
 run_ml_forecast <- FALSE
 
-fit_statistical_ensemble <- TRUE
+fit_statistical_ensemble <- FALSE
 
 run_importance <- TRUE
 
@@ -222,32 +222,32 @@ if (fit_statistical_ensemble) {
 
     testing_ensemble_data <- testing(ensemble_split)
     
-    training_ensemble_data <- training_ensemble_data %>% 
-      group_by(system) %>% 
-      mutate(obs_mean = mean(observed),
-             obs_sd = sd(observed)) %>% 
-      mutate(observed = (observed - obs_mean) / obs_sd) %>% 
-      ungroup()
+    # training_ensemble_data <- training_ensemble_data %>% 
+    #   group_by(system) %>% 
+    #   mutate(obs_mean = mean(observed),
+    #          obs_sd = sd(observed)) %>% 
+    #   mutate(observed = (observed - obs_mean) / obs_sd) %>% 
+    #   ungroup()
     
-    testing_ensemble_data <- testing_ensemble_data %>% 
-      group_by(system) %>% 
-      mutate(obs_mean = mean(observed),
-             obs_sd = sd(observed)) %>% 
-      mutate(observed = (observed - obs_mean) / obs_sd) %>% 
-      ungroup()
+    # testing_ensemble_data <- testing_ensemble_data %>% 
+    #   group_by(system) %>% 
+    #   mutate(obs_mean = mean(observed),
+    #          obs_sd = sd(observed)) %>% 
+    #   mutate(observed = (observed - obs_mean) / obs_sd) %>% 
+    #   ungroup()
     
     
-    training_things <- training_ensemble_data %>% 
-      select(obs_mean,obs_sd)
-    
-    testing_things <- testing_ensemble_data %>% 
-      select(obs_mean,obs_sd)
-    
-    training_ensemble_data <- training_ensemble_data %>% 
-      select(-obs_mean,-obs_sd) 
-    
-    testing_ensemble_data <- testing_ensemble_data %>% 
-      select(-obs_mean,-obs_sd) 
+    # training_things <- training_ensemble_data %>% 
+    #   select(obs_mean,obs_sd)
+    # 
+    # testing_things <- testing_ensemble_data %>% 
+    #   select(obs_mean,obs_sd)
+    # 
+    # training_ensemble_data <- training_ensemble_data %>% 
+    #   select(-obs_mean,-obs_sd) 
+    # 
+    # testing_ensemble_data <- testing_ensemble_data %>% 
+    #   select(-obs_mean,-obs_sd) 
     
     
     ensemble_splits <-
@@ -274,7 +274,7 @@ if (fit_statistical_ensemble) {
       ) %>%
       dials::finalize(mtry(), x = training_ensemble_data %>% select(-(1:2)))
 
-    xgboost_grid <- grid_latin_hypercube(tune_grid, size = 25)
+    xgboost_grid <- grid_latin_hypercube(tune_grid, size = 22)
 
     xgboost_model <-
       parsnip::boost_tree(
@@ -351,18 +351,24 @@ if (fit_statistical_ensemble) {
     # vip::vi(ranger_ensemble_model) %>%
     #   vip::vip()
 
+    # training_ensemble_data$ensemble_forecast <-
+    #   (predict(trained_ensemble, new_data = training_ensemble_data)$.pred * training_things$obs_sd) + training_things$obs_mean
+    # 
     training_ensemble_data$ensemble_forecast <-
-      (predict(trained_ensemble, new_data = training_ensemble_data)$.pred * training_things$obs_sd) + training_things$obs_mean
+      predict(trained_ensemble, new_data = training_ensemble_data)$.pred
 
-    training_ensemble_data$observed <-
-      (training_ensemble_data$observed * training_things$obs_sd) + training_things$obs_mean
-    
+    # training_ensemble_data$observed <-
+    #   (training_ensemble_data$observed * training_things$obs_sd) + training_things$obs_mean
+    # 
+    # testing_ensemble_data$ensemble_forecast <-
+    #   (predict(trained_ensemble, new_data = testing_ensemble_data)$.pred * testing_things$obs_sd) + testing_things$obs_mean
+    # 
     testing_ensemble_data$ensemble_forecast <-
-      (predict(trained_ensemble, new_data = testing_ensemble_data)$.pred * testing_things$obs_sd) + testing_things$obs_mean
+      predict(trained_ensemble, new_data = testing_ensemble_data)$.pred
     
-    testing_ensemble_data$observed <-
-      (testing_ensemble_data$observed * testing_things$obs_sd) + testing_things$obs_mean
-    
+    # testing_ensemble_data$observed <-
+    #   (testing_ensemble_data$observed * testing_things$obs_sd) + testing_things$obs_mean
+    # 
 
     ensemble_forecasts <- training_ensemble_data %>%
       bind_rows(testing_ensemble_data) %>%
