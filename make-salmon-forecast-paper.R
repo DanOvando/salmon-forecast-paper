@@ -37,7 +37,7 @@ fit_statistical_ensemble <- FALSE
 
 run_importance <- TRUE
 
-knit_manuscript <- FALSE
+knit_manuscript <- TRUE
 
 scalar <- 1000
 
@@ -204,6 +204,7 @@ ensemble_data[is.na(ensemble_data)] <- -999
 
 ensemble_data <- ensemble_data %>%
   arrange(year)
+
 if (fit_statistical_ensemble) {
   fit_ensemble <- function(test_year, ensemble_data) {
     message(glue::glue("fitting ensemble through {test_year}"))
@@ -260,72 +261,102 @@ if (fit_statistical_ensemble) {
     #   cumulative = TRUE
     # )
     #
+    
+    
     tune_grid <-
-      parameters(
-        min_n(range(1, 10)),
-        tree_depth(range(2, 15)),
-        learn_rate(range = c(log10(.05), log10(.8))),
-        mtry(),
-        loss_reduction(range(-15, log10(
-          sd(training_ensemble_data$observed)
-        ))),
-        sample_prop(range = c(1, 1)),
-        trees(range = c(500, 2000))
-      ) %>%
+      parameters(min_n(range(2, 10)), mtry(), trees(range(200, 5000)))  %>%
       dials::finalize(mtry(), x = training_ensemble_data %>% select(-(1:2)))
+    
+    # tune_grid <-
+    #   parameters(
+    #     min_n(range(1, 10)),
+    #     tree_depth(range(2, 15)),
+    #     learn_rate(range = c(log10(.05), log10(.8))),
+    #     mtry(),
+    #     loss_reduction(range(-15, log10(
+    #       sd(training_ensemble_data$observed)
+    #     ))),
+    #     sample_prop(range = c(1, 1)),
+    #     trees(range = c(500, 2000))
+    #   ) %>%
+    #   dials::finalize(mtry(), x = training_ensemble_data %>% select(-(1:2)))
 
-    xgboost_grid <- grid_latin_hypercube(tune_grid, size = 22)
+    ens_grid <- grid_latin_hypercube(tune_grid, size = 30)
 
-    xgboost_model <-
-      parsnip::boost_tree(
+    # ens_model <-
+    #   parsnip::boost_tree(
+    #     mode = "regression",
+    #     mtry = tune(),
+    #     min_n = tune(),
+    #     loss_reduction = tune(),
+    #     sample_size = tune(),
+    #     learn_rate = tune(),
+    #     tree_depth = tune(),
+    #     trees = tune()
+    #   ) %>%
+    #   parsnip::set_engine("xgboost")
+    
+    ens_model <-
+      parsnip::rand_forest(
         mode = "regression",
         mtry = tune(),
         min_n = tune(),
-        loss_reduction = tune(),
-        sample_size = tune(),
-        learn_rate = tune(),
-        tree_depth = tune(),
         trees = tune()
       ) %>%
-      parsnip::set_engine("xgboost")
+      parsnip::set_engine("ranger")
 
     # ranger_workflow <- workflows::workflow() %>%
     #   add_formula(observed ~ .) %>%
     #   add_model(ranger_model)
     #
-    xgboost_workflow <- workflows::workflow() %>%
+    ens_workflow <- workflows::workflow() %>%
       add_formula(observed ~ .) %>%
-      add_model(xgboost_model)
+      add_model(ens_model)
 
     doParallel::stopImplicitCluster()
     set.seed(234)
     doParallel::registerDoParallel(cores = parallel::detectCores() - 4)
 
-    xgboost_tuning <- tune_grid(
-      xgboost_workflow,
+    ens_tuning <- tune_grid(
+      ens_workflow,
       resamples = ensemble_splits,
-      grid = xgboost_grid,
+      grid = ens_grid,
       control = control_grid(save_pred = TRUE)
     )
 
-    best_vals <- tune::select_best(xgboost_tuning, metric = "rmse")
+    best_vals <- tune::select_best(ens_tuning, metric = "rmse")
 
-    final_workflow <- finalize_workflow(xgboost_workflow,
+    final_workflow <- finalize_workflow(ens_workflow,
                                         best_vals)
 
+    # trained_ensemble <- last_fit(
+    #   final_workflow,
+    #   split = ensemble_split # this is broken with initial_time_split
+    # )
+    # 
     trained_ensemble <-
-      parsnip::boost_tree(
+      parsnip::rand_forest(
         mode = "regression",
         mtry = best_vals$mtry,
         min_n = best_vals$min_n,
-        loss_reduction = best_vals$loss_reduction,
-        sample_size = best_vals$sample_size,
-        learn_rate = best_vals$learn_rate,
-        tree_depth = best_vals$tree_depth,
         trees = best_vals$trees
       ) %>%
-      parsnip::set_engine("xgboost") %>%
+      parsnip::set_engine("ranger") %>%
       parsnip::fit(observed ~ ., data = training_ensemble_data)
+
+    # trained_ensemble <-
+    #   parsnip::boost_tree(
+    #     mode = "regression",
+    #     mtry = best_vals$mtry,
+    #     min_n = best_vals$min_n,
+    #     loss_reduction = best_vals$loss_reduction,
+    #     sample_size = best_vals$sample_size,
+    #     learn_rate = best_vals$learn_rate,
+    #     tree_depth = best_vals$tree_depth,
+    #     trees = best_vals$trees
+    #   ) %>%
+    #   parsnip::set_engine("xgboost") %>%
+    #   parsnip::fit(observed ~ ., data = training_ensemble_data)
 
 
     # trained_ensemble %>%
@@ -376,6 +407,7 @@ if (fit_statistical_ensemble) {
 
     # ensemble_forecasts %>%
     #   ggplot(aes(observed, ensemble_forecast, color = set)) +
+    #   geom_abline(slope = 1, intercept = 0) +
     #   geom_point()
 
     return(ensemble_forecasts)
@@ -410,7 +442,7 @@ forecasts <- forecasts %>%
 
 ensemble_forecasts <- temp %>%
   filter(year == test_year) %>%
-  mutate(model = "boost_tree_ensemble") %>%
+  mutate(model = "random_forest_ensemble") %>%
   mutate(observed = observed * scalar,
          ensemble_forecast = ensemble_forecast * scalar)
 
@@ -897,12 +929,12 @@ pal <-
 
 top_models <- system_performance %>%
   group_by(system) %>%
-  filter(!model %in% c('boost_tree_ensemble', 'fri')) %>%
+  filter(!model %in% c('random_forest_ensemble', 'fri')) %>%
   filter(srmse == min(srmse)) %>%
   mutate(combo = paste(system, model, sep = "_"))
 
 next_best <- system_performance %>%
-  filter(!model %in% c('boost_tree_ensemble', 'fri')) %>%
+  filter(!model %in% c('random_forest_ensemble', 'fri')) %>%
   group_by(system) %>%
   mutate(model_rank = rank(srmse)) %>%
   filter(model_rank < 3) %>%
@@ -952,7 +984,7 @@ system_forecast_figure
 # figure 4 ----------------------------------------------------------------
 
 top_models <- age_performance %>%
-  filter(!model %in% c('boost_tree_ensemble', 'fri')) %>%
+  filter(!model %in% c('random_forest_ensemble', 'fri')) %>%
   group_by(age_group) %>%
   filter(srmse == min(srmse)) %>%
   mutate(combo = paste(age_group, model, sep = "_")) %>%
@@ -963,7 +995,7 @@ top_age_forecast <- age_forecast %>%
   filter(combo %in% top_models$combo)
 
 next_best <- age_performance %>%
-  filter(!model %in% c('boost_tree_ensemble', 'fri')) %>%
+  filter(!model %in% c('random_forest_ensemble', 'fri')) %>%
   group_by(age_group) %>%
   mutate(model_rank = rank(srmse)) %>%
   filter(model_rank < 3) %>%
@@ -1020,13 +1052,13 @@ age_forecast_figure
 # figure n ----------------------------------------------------------------
 
 top_models <- total_performance %>%
-  filter(!model %in% c('boost_tree_ensemble', 'fri')) %>%
+  filter(!model %in% c('random_forest_ensemble', 'fri')) %>%
   filter(srmse == min(srmse)) %>%
   mutate(combo = paste(model, sep = "_")) %>%
   ungroup()
 
 next_best <- total_performance %>%
-  filter(!model %in% c('boost_tree_ensemble', 'fri')) %>%
+  filter(!model %in% c('random_forest_ensemble', 'fri')) %>%
   mutate(model_rank = rank(srmse)) %>%
   filter(model_rank < 3) %>%
   summarise(
@@ -1067,7 +1099,7 @@ pal <-
 
 top_ensemble <- system_performance %>%
   group_by(system) %>%
-  filter(model %in% c('boost_tree_ensemble', 'fri')) %>%
+  filter(model %in% c('random_forest_ensemble', 'fri')) %>%
   filter(srmse == min(srmse)) %>%
   select(model, system, srmse) %>%
   rename(ens_srmse = srmse) %>%
@@ -1077,7 +1109,7 @@ top_ensemble <- system_performance %>%
 
 top_non_ensemble <- system_performance %>%
   group_by(system) %>%
-  filter(!model %in% c('boost_tree_ensemble', 'fri')) %>%
+  filter(!model %in% c('random_forest_ensemble', 'fri')) %>%
   filter(srmse == min(srmse)) %>%
   select(system, srmse) %>%
   ungroup()
@@ -1299,7 +1331,7 @@ yearly_system_resid_struggles_figure <- system_forecast %>%
   mutate(resid = forecast - observed) %>%
   group_by(system) %>%
   mutate(scaled_resid = scale(resid)) %>%
-  filter(!model %in% c("boost_tree_ensemble", "fri")) %>%
+  filter(!model %in% c("random_forest_ensemble", "fri")) %>%
   ggplot() +
   geom_hline(yintercept = c(-1,1), linetype = 2) +
   geom_ribbon(aes(year, ymin = 1, ymax = 4), fill = "darkgrey", alpha = 0.5) +
