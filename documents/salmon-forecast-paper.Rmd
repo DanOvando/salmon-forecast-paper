@@ -316,7 +316,7 @@ The general structure of our methods is as follows:
 
 3. Individual models were aggregated into a statistical ensemble model based on their historic performance against the lag-1 benchmark
 
-4. The statistical ensemble model was then compared to the XX Curry can you think if a better way to phrase this?XX more qualitatively constructed ensemble model
+4. The statistical ensemble model was then compared to the more qualitatively constructed ensemble model, in which researchers manually select individual models from an evolving suite of methods based on recent (20-year) performance. This is the method historically used to generate Bristol Bay salmon forecasts, although the individual prediction models within the selection suite have changed over time. As such is method provides a status quo benchmark to which individual models and updated ensembles may be compared. 
 
 
 ## Machine Learning Models {.unnumbered}
