@@ -434,7 +434,7 @@ The result that some models outperform others under specific circumstances (e.g.
 system_ensemble_forecast_figure
 ```
 
-## Frontiers in Performance
+## Frontiers in Performance  {.unnumbered}
 
 The underlying assumption of such an ensemble strategy is that the information needed for an accurate forecast is present in the data, and the key is finding the model that is best able to identify and leverage that information. However, no model can find information that simply is not there, or succeed if it is based upon data that is subject to overwhelming observation error. Examining trends in the annual residuals by model and river system shows clear patterns. In some years and river systems, all models perform similarly well, indicating that the information needed for a good forecast was present and detectable by each of the models (e.g. Nushagak before 2015). In other years, only particular models performed well, while others struggled, indicating that information needed for a robust forecast was present but only some models were able to accurately identify the underlying relationship, highlighting the value of ensemble methods (e.g. Naknek between 2005 and 2010). However, in other years and river systems all models struggled, for example the Wood River in 2018 and the Kvichak River in 2014. This provides evidence that the information needed to generate a robust forecast in those years was simply not present in the data that were available at the time (Fig.\@ref(fig:resids)).
 
