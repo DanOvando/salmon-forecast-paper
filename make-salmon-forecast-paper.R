@@ -14,7 +14,7 @@ return_table_year <- 2019
 
 prep_run(
   results_name = "v1.0.0.9000",
-  results_description = "draft publication with boost tree improvements loo starting in 1990 on abalone",
+  results_description = "draft publication with boost tree improvements loo starting in 1990",
   first_year = 1990,
   last_year = 2019,
   min_year = 1963,
@@ -37,7 +37,7 @@ fit_statistical_ensemble <- FALSE
 
 run_importance <- TRUE
 
-knit_manuscript <- FALSE
+knit_manuscript <- TRUE
 
 scalar <- 1000
 
@@ -222,7 +222,35 @@ if (fit_statistical_ensemble) {
     training_ensemble_data <- training(ensemble_split)
 
     testing_ensemble_data <- testing(ensemble_split)
-
+    
+    # training_ensemble_data <- training_ensemble_data %>% 
+    #   group_by(system) %>% 
+    #   mutate(obs_mean = mean(observed),
+    #          obs_sd = sd(observed)) %>% 
+    #   mutate(observed = (observed - obs_mean) / obs_sd) %>% 
+    #   ungroup()
+    
+    # testing_ensemble_data <- testing_ensemble_data %>% 
+    #   group_by(system) %>% 
+    #   mutate(obs_mean = mean(observed),
+    #          obs_sd = sd(observed)) %>% 
+    #   mutate(observed = (observed - obs_mean) / obs_sd) %>% 
+    #   ungroup()
+    
+    
+    # training_things <- training_ensemble_data %>% 
+    #   select(obs_mean,obs_sd)
+    # 
+    # testing_things <- testing_ensemble_data %>% 
+    #   select(obs_mean,obs_sd)
+    # 
+    # training_ensemble_data <- training_ensemble_data %>% 
+    #   select(-obs_mean,-obs_sd) 
+    # 
+    # testing_ensemble_data <- testing_ensemble_data %>% 
+    #   select(-obs_mean,-obs_sd) 
+    
+    
     ensemble_splits <-
       rsample::group_vfold_cv(training_ensemble_data, group = year)
 
@@ -233,72 +261,102 @@ if (fit_statistical_ensemble) {
     #   cumulative = TRUE
     # )
     #
+    
+    
     tune_grid <-
-      parameters(
-        min_n(range(1, 10)),
-        tree_depth(range(2, 15)),
-        learn_rate(range = c(log10(.1), log10(.6))),
-        mtry(),
-        loss_reduction(range(-15, log10(
-          sd(training_ensemble_data$observed)
-        ))),
-        sample_prop(range = c(1, 1)),
-        trees(range = c(500, 2000))
-      ) %>%
+      parameters(min_n(range(2, 10)), mtry(), trees(range(200, 5000)))  %>%
       dials::finalize(mtry(), x = training_ensemble_data %>% select(-(1:2)))
+    
+    # tune_grid <-
+    #   parameters(
+    #     min_n(range(1, 10)),
+    #     tree_depth(range(2, 15)),
+    #     learn_rate(range = c(log10(.05), log10(.8))),
+    #     mtry(),
+    #     loss_reduction(range(-15, log10(
+    #       sd(training_ensemble_data$observed)
+    #     ))),
+    #     sample_prop(range = c(1, 1)),
+    #     trees(range = c(500, 2000))
+    #   ) %>%
+    #   dials::finalize(mtry(), x = training_ensemble_data %>% select(-(1:2)))
 
-    xgboost_grid <- grid_latin_hypercube(tune_grid, size = 20)
+    ens_grid <- grid_latin_hypercube(tune_grid, size = 30)
 
-    xgboost_model <-
-      parsnip::boost_tree(
+    # ens_model <-
+    #   parsnip::boost_tree(
+    #     mode = "regression",
+    #     mtry = tune(),
+    #     min_n = tune(),
+    #     loss_reduction = tune(),
+    #     sample_size = tune(),
+    #     learn_rate = tune(),
+    #     tree_depth = tune(),
+    #     trees = tune()
+    #   ) %>%
+    #   parsnip::set_engine("xgboost")
+    
+    ens_model <-
+      parsnip::rand_forest(
         mode = "regression",
         mtry = tune(),
         min_n = tune(),
-        loss_reduction = tune(),
-        sample_size = tune(),
-        learn_rate = tune(),
-        tree_depth = tune(),
         trees = tune()
       ) %>%
-      parsnip::set_engine("xgboost")
+      parsnip::set_engine("ranger")
 
     # ranger_workflow <- workflows::workflow() %>%
     #   add_formula(observed ~ .) %>%
     #   add_model(ranger_model)
     #
-    xgboost_workflow <- workflows::workflow() %>%
+    ens_workflow <- workflows::workflow() %>%
       add_formula(observed ~ .) %>%
-      add_model(xgboost_model)
+      add_model(ens_model)
 
     doParallel::stopImplicitCluster()
     set.seed(234)
-    doParallel::registerDoParallel(cores = parallel::detectCores() - 2)
+    doParallel::registerDoParallel(cores = parallel::detectCores() - 4)
 
-    xgboost_tuning <- tune_grid(
-      xgboost_workflow,
+    ens_tuning <- tune_grid(
+      ens_workflow,
       resamples = ensemble_splits,
-      grid = xgboost_grid,
+      grid = ens_grid,
       control = control_grid(save_pred = TRUE)
     )
 
-    best_vals <- tune::select_best(xgboost_tuning, metric = "rmse")
+    best_vals <- tune::select_best(ens_tuning, metric = "rmse")
 
-    final_workflow <- finalize_workflow(xgboost_workflow,
+    final_workflow <- finalize_workflow(ens_workflow,
                                         best_vals)
 
+    # trained_ensemble <- last_fit(
+    #   final_workflow,
+    #   split = ensemble_split # this is broken with initial_time_split
+    # )
+    # 
     trained_ensemble <-
-      parsnip::boost_tree(
+      parsnip::rand_forest(
         mode = "regression",
         mtry = best_vals$mtry,
         min_n = best_vals$min_n,
-        loss_reduction = best_vals$loss_reduction,
-        sample_size = best_vals$sample_size,
-        learn_rate = best_vals$learn_rate,
-        tree_depth = best_vals$tree_depth,
         trees = best_vals$trees
       ) %>%
-      parsnip::set_engine("xgboost") %>%
+      parsnip::set_engine("ranger") %>%
       parsnip::fit(observed ~ ., data = training_ensemble_data)
+
+    # trained_ensemble <-
+    #   parsnip::boost_tree(
+    #     mode = "regression",
+    #     mtry = best_vals$mtry,
+    #     min_n = best_vals$min_n,
+    #     loss_reduction = best_vals$loss_reduction,
+    #     sample_size = best_vals$sample_size,
+    #     learn_rate = best_vals$learn_rate,
+    #     tree_depth = best_vals$tree_depth,
+    #     trees = best_vals$trees
+    #   ) %>%
+    #   parsnip::set_engine("xgboost") %>%
+    #   parsnip::fit(observed ~ ., data = training_ensemble_data)
 
 
     # trained_ensemble %>%
@@ -324,11 +382,24 @@ if (fit_statistical_ensemble) {
     # vip::vi(ranger_ensemble_model) %>%
     #   vip::vip()
 
+    # training_ensemble_data$ensemble_forecast <-
+    #   (predict(trained_ensemble, new_data = training_ensemble_data)$.pred * training_things$obs_sd) + training_things$obs_mean
+    # 
     training_ensemble_data$ensemble_forecast <-
       predict(trained_ensemble, new_data = training_ensemble_data)$.pred
 
+    # training_ensemble_data$observed <-
+    #   (training_ensemble_data$observed * training_things$obs_sd) + training_things$obs_mean
+    # 
+    # testing_ensemble_data$ensemble_forecast <-
+    #   (predict(trained_ensemble, new_data = testing_ensemble_data)$.pred * testing_things$obs_sd) + testing_things$obs_mean
+    # 
     testing_ensemble_data$ensemble_forecast <-
       predict(trained_ensemble, new_data = testing_ensemble_data)$.pred
+    
+    # testing_ensemble_data$observed <-
+    #   (testing_ensemble_data$observed * testing_things$obs_sd) + testing_things$obs_mean
+    # 
 
     ensemble_forecasts <- training_ensemble_data %>%
       bind_rows(testing_ensemble_data) %>%
@@ -336,6 +407,7 @@ if (fit_statistical_ensemble) {
 
     # ensemble_forecasts %>%
     #   ggplot(aes(observed, ensemble_forecast, color = set)) +
+    #   geom_abline(slope = 1, intercept = 0) +
     #   geom_point()
 
     return(ensemble_forecasts)
@@ -370,7 +442,7 @@ forecasts <- forecasts %>%
 
 ensemble_forecasts <- temp %>%
   filter(year == test_year) %>%
-  mutate(model = "boost_tree_ensemble") %>%
+  mutate(model = "random_forest_ensemble") %>%
   mutate(observed = observed * scalar,
          ensemble_forecast = ensemble_forecast * scalar)
 
@@ -857,12 +929,12 @@ pal <-
 
 top_models <- system_performance %>%
   group_by(system) %>%
-  filter(!model %in% c('boost_tree_ensemble', 'fri')) %>%
+  filter(!model %in% c('random_forest_ensemble', 'fri')) %>%
   filter(srmse == min(srmse)) %>%
   mutate(combo = paste(system, model, sep = "_"))
 
 next_best <- system_performance %>%
-  filter(!model %in% c('boost_tree_ensemble', 'fri')) %>%
+  filter(!model %in% c('random_forest_ensemble', 'fri')) %>%
   group_by(system) %>%
   mutate(model_rank = rank(srmse)) %>%
   filter(model_rank < 3) %>%
@@ -912,7 +984,7 @@ system_forecast_figure
 # figure 4 ----------------------------------------------------------------
 
 top_models <- age_performance %>%
-  filter(!model %in% c('boost_tree_ensemble', 'fri')) %>%
+  filter(!model %in% c('random_forest_ensemble', 'fri')) %>%
   group_by(age_group) %>%
   filter(srmse == min(srmse)) %>%
   mutate(combo = paste(age_group, model, sep = "_")) %>%
@@ -923,7 +995,7 @@ top_age_forecast <- age_forecast %>%
   filter(combo %in% top_models$combo)
 
 next_best <- age_performance %>%
-  filter(!model %in% c('boost_tree_ensemble', 'fri')) %>%
+  filter(!model %in% c('random_forest_ensemble', 'fri')) %>%
   group_by(age_group) %>%
   mutate(model_rank = rank(srmse)) %>%
   filter(model_rank < 3) %>%
@@ -980,13 +1052,13 @@ age_forecast_figure
 # figure n ----------------------------------------------------------------
 
 top_models <- total_performance %>%
-  filter(!model %in% c('boost_tree_ensemble', 'fri')) %>%
+  filter(!model %in% c('random_forest_ensemble', 'fri')) %>%
   filter(srmse == min(srmse)) %>%
   mutate(combo = paste(model, sep = "_")) %>%
   ungroup()
 
 next_best <- total_performance %>%
-  filter(!model %in% c('boost_tree_ensemble', 'fri')) %>%
+  filter(!model %in% c('random_forest_ensemble', 'fri')) %>%
   mutate(model_rank = rank(srmse)) %>%
   filter(model_rank < 3) %>%
   summarise(
@@ -1027,7 +1099,7 @@ pal <-
 
 top_ensemble <- system_performance %>%
   group_by(system) %>%
-  filter(model %in% c('boost_tree_ensemble', 'fri')) %>%
+  filter(model %in% c('random_forest_ensemble', 'fri')) %>%
   filter(srmse == min(srmse)) %>%
   select(model, system, srmse) %>%
   rename(ens_srmse = srmse) %>%
@@ -1037,7 +1109,7 @@ top_ensemble <- system_performance %>%
 
 top_non_ensemble <- system_performance %>%
   group_by(system) %>%
-  filter(!model %in% c('boost_tree_ensemble', 'fri')) %>%
+  filter(!model %in% c('random_forest_ensemble', 'fri')) %>%
   filter(srmse == min(srmse)) %>%
   select(system, srmse) %>%
   ungroup()
@@ -1259,7 +1331,7 @@ yearly_system_resid_struggles_figure <- system_forecast %>%
   mutate(resid = forecast - observed) %>%
   group_by(system) %>%
   mutate(scaled_resid = scale(resid)) %>%
-  filter(!model %in% c("boost_tree_ensemble", "fri")) %>%
+  filter(!model %in% c("random_forest_ensemble", "fri")) %>%
   ggplot() +
   geom_hline(yintercept = c(-1,1), linetype = 2) +
   geom_ribbon(aes(year, ymin = 1, ymax = 4), fill = "darkgrey", alpha = 0.5) +
@@ -1302,6 +1374,32 @@ if (file.exists(file.path(results_dir, "next_forecast.rds"))) {
     rename(best_model = model) %>%
     select(system,age_group, best_model)
 
+  rawer_forecast_table <- latest_forecast %>%
+    ungroup() %>%
+    filter(ret_yr == max(ret_yr)) %>%
+    rename(
+      forecast = pred,
+      age_group = dep_age,
+      year = ret_yr,
+      model = model_type
+    ) %>%
+    ungroup() %>%
+    mutate(
+      age_group = str_replace(age_group, "\\.", "_"),
+      age_group = forcats::fct_relevel(age_group, c("1_2", "1_3", "2_2", "2_3"))
+    ) %>%
+    select(year, system, age_group, forecast, model) %>%
+    mutate(forecast = pmax(0, forecast)) %>%
+    left_join(tmp, by = c("system","age_group")) %>%
+    group_by(system, age_group, year) %>%
+    filter(model == best_model) %>%
+    select(-best_model) %>%
+    group_by(system, year, model) %>%
+    mutate(forecast = forecast / 1000000,
+           age_group = str_replace_all(age_group, "_",".")) %>%
+    ungroup() %>%
+    arrange(year, age_group)
+  
   raw_forecast_table <- latest_forecast %>%
     ungroup() %>%
     filter(ret_yr == max(ret_yr)) %>%
@@ -1345,6 +1443,11 @@ if (file.exists(file.path(results_dir, "next_forecast.rds"))) {
   write_csv(
     raw_forecast_table %>% mutate_if(is.numeric, round,3),
     file.path(results_dir, "raw-machine-learning-forecast-table.csv")
+  )
+  
+  write_csv(
+    rawer_forecast_table,
+    file.path(results_dir, "rawer-machine-learning-forecast-table.csv")
   )
 
   total_vars <- colnames(raw_forecast_table)
@@ -1498,7 +1601,7 @@ if (file.exists(file.path(results_dir, "parsnip_loo_preds.rds"))) {
 
 performance <- ls()[str_detect(ls(), "_performance$")]
 
-forecasts <-
+forecasts_run <-
   ls()[str_detect(ls(), "_forecast$") &
          !str_detect(ls(), "run_") & !str_detect(ls(), "next_forecast")]
 
@@ -1507,7 +1610,7 @@ plots <- ls()[str_detect(ls(), "(_plot)|(_figure)")]
 save(list = performance,
      file = file.path(results_dir, "performance.RData"))
 
-save(list = forecasts,
+save(list = forecasts_run,
      file = file.path(results_dir, "forecasts.RData"))
 
 save(list = plots, file = file.path(results_dir, "plots.RData"))
@@ -1539,6 +1642,12 @@ if (knit_manuscript) {
     here::here("documents", "salmon-forecast-paper.Rmd"),
     params = list(results_name = results_name)
   )
+  
+  rmarkdown::render(
+    here::here("documents", "salmon-forecast-paper-si.Rmd"),
+    params = list(results_name = results_name)
+  )
+  
 
 
 }

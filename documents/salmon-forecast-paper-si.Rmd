@@ -1,0 +1,276 @@
+---
+title: "Identifying Frontiers in Ecological Forecasting with Modern Computational Tools"
+author:
+- Daniel Ovando*
+- Curry Cunningham
+- Peter Kuriyama
+- Chris Boatright
+- Ray Hilborn
+date: "`r Sys.Date()`"
+output:
+  bookdown::pdf_document2: default
+  bookdown::word_document2:
+    reference_docx: template.docx
+  pdf_document: default
+subtitle: Supporting Information
+bibliography: ../references.bib
+csl: ecological-applications.csl
+params:
+  results_name: v1.0.0.9000
+linkcolor: blue
+toc: FALSE
+header-includes:
+- \usepackage{setspace}\doublespacing
+- \usepackage{lineno}\linenumbers
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,  dev = "cairo_pdf", message = FALSE, warning = FALSE)
+library(tidyverse)
+library(patchwork)
+library(cowplot)
+library(magick)
+library(hrbrthemes)
+library(ggplot2)
+library(Cairo)
+library(extrafont)
+library(here)
+library(scales)
+extrafont::loadfonts()
+
+results_dir <- here("results", params$results_name)
+
+pub_theme <-
+  hrbrthemes::theme_ipsum(base_size = 10, axis_text_size = 8, axis_title_size = 12) +
+  theme(
+    panel.spacing = unit(0.5, "lines"),
+    plot.margin = unit(rep(10, 4), units = "points")
+  )
+
+theme_set(pub_theme)
+
+
+# load plots
+
+load(file = file.path(results_dir, "plots.RData"))
+
+load(file = file.path(results_dir, "performance.RData"))
+
+load(file = file.path(results_dir, "forecasts.RData"))
+
+
+```
+
+```{r models}
+
+benchmarks <- system_performance %>% 
+  filter(model == "fri" | model == "lag") %>% 
+  select(model, system, rmse) %>% 
+  pivot_wider(names_from = model, values_from = "rmse")
+
+age_benchmarks <- age_performance %>% 
+  filter(model == "fri" | model == "lag") %>% 
+  select(model, age_group, rmse) %>% 
+  pivot_wider(names_from = model, values_from = "rmse")
+
+
+sys_performers <- system_performance %>% 
+  filter(!model %in% c("fri"), !str_detect(model,"ensemble")) %>% 
+  group_by(system) %>% 
+  filter(srmse == min(srmse))
+
+comp_sys_improvement <- sys_performers %>% 
+  select(model, system, rmse) %>% 
+  left_join(benchmarks, by = "system") %>% 
+  ungroup() %>% 
+  summarise(imp_on_fri = -mean(rmse / fri - 1),
+            min_imp_on_fri = min(-(rmse / fri - 1)),
+            max_imp_on_fri = max(-(rmse / fri - 1)),
+            imp_on_lag =  -mean(rmse / lag - 1))
+
+tmp <- sys_performers %>% 
+  select(model, system, rmse) %>% 
+  left_join(benchmarks, by = "system") %>% 
+  ungroup() %>% 
+  mutate(imp_on_fri = -(rmse / fri - 1),
+            min_imp_on_fri = (-(rmse / fri - 1)),
+            max_imp_on_fri = (-(rmse / fri - 1)),
+            imp_on_lag =  -(rmse / lag - 1))
+
+age_performers <- age_performance %>% 
+  filter(!model %in% c("fri", "boost_tree_ensemble")) %>% 
+  group_by(age_group) %>% 
+  filter(srmse == min(srmse))
+
+tmp2 <- age_performers %>% 
+  select(model, age_group, rmse) %>% 
+  left_join(age_benchmarks, by = "age_group") %>% 
+  ungroup() %>% 
+  mutate(imp_on_fri = -(rmse / fri - 1),
+            min_imp_on_fri = (-(rmse / fri - 1)),
+            max_imp_on_fri = (-(rmse / fri - 1)),
+            imp_on_lag =  -(rmse / lag - 1))
+
+a = tmp %>%
+  ggplot(aes(reorder(system, -imp_on_fri), imp_on_fri, fill = model)) +
+  geom_hline(aes(yintercept = 0)) +
+  geom_col(color = "black") +
+  scale_y_percent(name = "% Improvement on Traditional FRI Methods") +
+  scale_x_discrete(name = '')+
+  fishualize::scale_fill_fish_d(name = 'Best Model', option = "Trimma_lantana") + 
+  theme(axis.text.x = element_text(size = 10),
+        axis.text.y = element_text(size = 14)) 
+
+ggsave( "rep_fig_1.pdf",a, device = cairo_pdf, width = 6, height = 4)
+
+b = tmp2 %>%
+  mutate(age_group = str_replace_all(age_group,"_",".")) %>% 
+  ggplot(aes(reorder(age_group, -imp_on_fri), imp_on_fri, fill = model)) +
+  geom_hline(aes(yintercept = 0)) +
+  geom_col(color = "black") +
+  scale_y_percent(name = "% Improvement on Traditional FRI Methods") +
+  scale_x_discrete(name = '')+
+  fishualize::scale_fill_fish_d(name = 'Best Model', option = "Trimma_lantana") + 
+  theme(axis.text.x = element_text(size = 10),
+        axis.text.y = element_text(size = 14)) 
+
+ggsave( "rep_fig_2.pdf",b, device = cairo_pdf, width = 6, height = 4)
+
+
+
+d <- total_forecast %>%
+  filter(model %in% c("boost_tree", "fri")) %>%
+  group_by(year) %>%
+  mutate(observed = mean(observed)) %>%
+  pivot_wider(names_from = "model", values_from = "forecast") %>%
+  ggplot() +
+  geom_hline(aes(yintercept = 0)) +
+  geom_area(aes(year, observed),fill = "lightgrey") +
+  geom_point(aes(year, boost_tree, fill = "boost_tree"), shape = 21, size = 4,alpha = 0.9) +
+  geom_point(aes(year, fri, fill = "UW-FRI"), shape = 21, size = 4,alpha =0.9) + 
+  fishualize::scale_fill_fish_d(name = '', option = "Trimma_lantana") + 
+  scale_y_continuous(name = "Total Returns") + 
+  scale_x_continuous(name = 'Year') + 
+    theme(axis.text.x = element_text(size = 10),
+        axis.text.y = element_text(size = 14)) 
+
+
+ggsave( "rep_fig_3.pdf",d, device = cairo_pdf, width = 6, height = 4)
+
+fri_system_mape <- system_forecast %>% 
+  filter(model == "fri") %>%
+  group_by(model) %>% 
+  summarise(mape = yardstick::mape_vec(observed, forecast))
+
+fri_age_mape <- age_forecast %>% 
+  filter(model == "fri") %>%
+  group_by(model, age_group) %>% 
+  summarise(mape = yardstick::mape_vec(observed, forecast))
+
+# system_forecast %>% 
+#   ggplot(aes(observed, forecast)) + 
+#   geom_point() + 
+#   geom_abline(aes(slope = 1, intercept = 0)) +
+#   facet_wrap(~model)
+
+
+mean_srmse_delta <- system_performance %>% 
+    filter(!model %in% c("fri", "boost_tree_ensemble")) %>% 
+  group_by(system) %>% 
+  mutate(rmse_rank = rank(rmse)) %>% 
+  filter(rmse_rank <= 2) %>% 
+  arrange(system) %>% 
+  group_by(system) %>% 
+  summarise(delta  = srmse[rmse_rank == 2] - srmse[rmse_rank == 1]) %>% 
+  ungroup() %>% 
+  summarise(mmd = mean(delta))
+
+comp_sys_improvement <- sys_performers %>% 
+  select(model, system, rmse) %>% 
+  left_join(benchmarks, by = "system") %>% 
+  ungroup() %>% 
+  summarise(imp_on_fri = -mean(rmse / fri - 1),
+            min_imp_on_fri = min(-(rmse / fri - 1)),
+            max_imp_on_fri = max(-(rmse / fri - 1)),
+            imp_on_lag =  -mean(rmse / lag - 1))
+
+
+sys_improv <- system_performance %>% 
+  select(model, system, srmse) %>% 
+  pivot_wider(names_from = model, values_from = srmse) %>% 
+  pivot_longer(-c(system, fri), names_to = "model", values_to = "srmse") %>% 
+  group_by(system) %>% 
+  filter(srmse == min(srmse)) %>% 
+  ungroup() %>% 
+  summarise(srmse_improv = mean((srmse - fri) / fri))
+
+age_improv <- age_performance %>% 
+  select(model, age_group, srmse) %>% 
+  pivot_wider(names_from = model, values_from = srmse) %>% 
+  pivot_longer(-c(age_group, fri), names_to = "model", values_to = "srmse") %>% 
+  group_by(age_group) %>% 
+  filter(srmse == min(srmse)) %>% 
+  ungroup() %>% 
+  summarise(srmse_improv = mean((srmse - fri) / fri))
+
+
+```
+
+
+\renewcommand{\thefigure}{S\arabic{figure}}
+
+\setcounter{figure}{0}
+
+\renewcommand{\thetable}{S\arabic{table}}
+
+\setcounter{table}{0}
+
+```{r srmse-fig, fig.cap="Scaled root mean squared error (SRMSE) for each model type (rows) by age group and system (columns).", fig.height=3}
+srmse_summary_figure + 
+  theme(axis.text.x = element_text(size = 6))
+```
+
+```{r srmse-fig-two, fig.cap="Best performing model in terms of scaled root mean squared error (SRMSE) for each age group and river system. Color indicates the percent improvement in SRMSE between the best performing model and the historic published Fisheries Research Institute (FRI) forecasts."}
+age_system_performance_figure
+```
+
++-----------------------------------+-----------------------------------------------------------------------------------------------+-------------------------------------------------------+
+| Data Type                         | Description                                                                                   | Dataset ID                                            |
++===================================+===============================================================================================+=======================================================+
+| Sea Surface Temperature           | HadISST Average Sea Surface Temperature, 1°, Global, Monthly, 1870-present                    | erdHadISST                                            |
++-----------------------------------+-----------------------------------------------------------------------------------------------+-------------------------------------------------------+
+| Sea Level Pressure                | Sea Level Pressure Monthly Mean at Surface, ICOADS, 1-degree, Enhanced, Monthly, 1960-present | esrlIcoads1ge                                         |
++-----------------------------------+-----------------------------------------------------------------------------------------------+-------------------------------------------------------+
+| Upwelling                         | u-wind Stress Monthly Mean at Surface, ICOADS, 1-degree, Enhanced, Monthly, 1960-present      | esrlIcoads1ge                                         |
++-----------------------------------+-----------------------------------------------------------------------------------------------+-------------------------------------------------------+
+|                                   |                                                                                               |                                                       |
++-----------------------------------+-----------------------------------------------------------------------------------------------+-------------------------------------------------------+
+| Pacific Decadal Oscillation Index | PDO Index                                                                                     | <http://research.jisao.washington.edu/pdo/PDO.latest> |
++-----------------------------------+-----------------------------------------------------------------------------------------------+-------------------------------------------------------+
+
+: (\#tab:env-data) Environmental Covariates Evaluated
+
++----------------------------------------+-------------------------------------------------------------------------------+
+| Model Name                             | Description                                                                   |
++========================================+===============================================================================+
+| Boosted Regression Trees (boost\_tree) | An ensemble of boosted regression trees                                       |
++----------------------------------------+-------------------------------------------------------------------------------+
+| Random Forest (rand\_forest)           | An ensemble of regression trees                                               |
++----------------------------------------+-------------------------------------------------------------------------------+
+| Recurrent Neural Network (rnn)         | A neural network with a memory component implemented through recurrent layers |
++----------------------------------------+-------------------------------------------------------------------------------+
+| Dynamic Linear Model (dlm)             | Sibling regression with dynamic components                                    |
++----------------------------------------+-------------------------------------------------------------------------------+
+| Simplex                                | simplex projection                                                            |
++----------------------------------------+-------------------------------------------------------------------------------+
+| S-map                                  | Sequentially locally weighted global linear maps                              |
++----------------------------------------+-------------------------------------------------------------------------------+
+| Lag-1 (lag_1)                            | Forecast next year equal to observed returns last year                        |
++----------------------------------------+-------------------------------------------------------------------------------+
+| Ensemble                               | A random forest ensemble made of other candidate models             |
++----------------------------------------+-------------------------------------------------------------------------------+
+|                                        |                                                                               |
++----------------------------------------+-------------------------------------------------------------------------------+
+
+: (\#tab:models) Candidate forecasting models evaluated
