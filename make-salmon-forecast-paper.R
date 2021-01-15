@@ -1642,6 +1642,12 @@ if (knit_manuscript) {
     here::here("documents", "salmon-forecast-paper.Rmd"),
     params = list(results_name = results_name)
   )
+  
+  rmarkdown::render(
+    here::here("documents", "salmon-forecast-paper-si.Rmd"),
+    params = list(results_name = results_name)
+  )
+  
 
 
 }
