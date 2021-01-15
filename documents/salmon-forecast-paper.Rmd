@@ -1,7 +1,5 @@
 ---
-title: |
-  | Identifying Frontiers in Ecological Forecasting with 
-  | Modern Computational Tools
+title: Identifying Frontiers in Ecological Forecasting with Modern Computational Tools
 author:
   - Daniel Ovando*
   - Curry Cunningham
@@ -18,14 +16,12 @@ csl: ecological-applications.csl
 params: 
   results_name: ["v1.0.0.9000"]
 linkcolor: blue
-toc: true
+toc: false
 header-includes:
   # - \RequirePackage{totcount,xpatch}
   # - \usepackage{totcount}
   - \usepackage{setspace}\doublespacing
   - \usepackage{lineno}\linenumbers
-abstract: |
-  Modern computational tools such as machine learning have transformed predictive fields from advertising to weather forecasting. However, these methods are potentially underutilized for managing ecological systems. Salmon are a natural, cultural, and economic keystone of Alaska, and accurate pre-season forecasts of the numbers of sockeye salmon (*Oncorhynchus nerka*), that will return to the river systems of Bristol Bay play an important role in management and harvesting decisions. These predictions are challenging though, given the complex set of dynamic factors that affect salmon. We use data from the salmon populations of Bristol Bay, Alaska, together with a suite of modern forecasting tools, to identify the frontiers in forecast accuracy possible given currently available data. By leveraging dynamic environmental information and correlations between salmon populations, we were able to reduce forecast error by on average 16% relative to benchmark models. We also demonstrate though that further improvements in forecast accuracy will likely require new sources of data. Our results demonstrate the utility and limitations of modern computational tools for applied management of natural resources, even when confronted with the short time series and observation error common in ecological systems
 ---
 
 ```{r setup, include=FALSE}
@@ -213,30 +209,30 @@ age_improv <- age_performance %>%
 <!-- Assemble the parts of the manuscript in this order: title page, abstract (or introduction) on a new page, key words, text, acknowledgments, literature cited, tables (one table per page), figure legends (on separate page preceding the first figure), figures (one figure per page; label each figure, i.e., Figure 1, Figure 2, etc.), and lastly any Appendices. Please note that if your manuscript is accepted, the appendices would only be published online. -->
 
 
-Frame the lag-1 model as null hypothesis, steve munch, averages variance around every estimate has a lower prediction. ONe sentence thing saying that colinearity 
+<!-- Frame the lag-1 model as null hypothesis, steve munch, averages variance around every estimate has a lower prediction. ONe sentence thing saying that colinearity  -->
 
-Make clearer that the lag 1 is to find which model works best individually, and then from there how do we make an ensemble. Statistical comparison of lag 1 vs practical performance 
+<!-- Make clearer that the lag 1 is to find which model works best individually, and then from there how do we make an ensemble. Statistical comparison of lag 1 vs practical performance  -->
 
-Now let's focus in on the ensemble 
+<!-- Now let's focus in on the ensemble  -->
 
-Add a recipe to the methods section for what's happening here
+<!-- Add a recipe to the methods section for what's happening here -->
 
-Add in comparison to FRI
+<!-- Add in comparison to FRI -->
 
-Add in the usual caveats about overfitting our purpose is 
+<!-- Add in the usual caveats about overfitting our purpose is  -->
 
-. At the same time there is a risk of overfitting, especially with the more modern methods, that is not addressed. What tools are available to extract insights of the fit from the more advanced method? You write some on that later in the paper, but perhaps hint on that already here? 
+<!-- . At the same time there is a risk of overfitting, especially with the more modern methods, that is not addressed. What tools are available to extract insights of the fit from the more advanced method? You write some on that later in the paper, but perhaps hint on that already here?  -->
 
 
-Data table? SI
+<!-- Data table? SI -->
 
-Make clearer that the FRI has had a mix of models over that time period and that makes the comparison 
+<!-- Make clearer that the FRI has had a mix of models over that time period and that makes the comparison  -->
 
-even then things fall on their face. the message isn't this is the best. make clearer that this isn't a horserace 
+<!-- even then things fall on their face. the message isn't this is the best. make clearer that this isn't a horserace  -->
 
-we've seen change in age structure, and point out that some of these models having done better at this. 
+<!-- we've seen change in age structure, and point out that some of these models having done better at this.  -->
 
-take a crack at the climate thing 
+<!-- take a crack at the climate thing  -->
 
 
 <!-- Modern computational tools such as dynamic linear modeling, machine learning and empirical dynamical modeling have fundamentally transformed many aspects of our society by providing previously impossible levels of predictive accuracy to tasks from digital advertising to weather forecasting. However, these methods are underutilized for predicting and managing natural resources and ecological systems. Forecasts of fish populations are an integral part of many management systems, and are often used by the fishing and processing sectors to make business plans. Almost all fish forecasts are currently based on population dynamics using estimates of birth rates and survival from recent years. Salmon are an ecological, cultural, and economic keystone of Alaska, and forecasts of salmon runs are used by fish processors to inform staffing and supply decisions, and even to determine whether to operate for the fishing fleets. These forecast are also used by harvesters to inform spatial effort allocation decisions and determine crew size. Although valuable, these predictions are challenging given the complex set of dynamic factors that affect numbers of returning salmon, from egg production to predation to the environmental drivers of salmon survival in marine and freshwater habitats. We utilize data from the salmon populations of Bristol Bay, Alaska, together with a suite of modern forecasting tools, to attempt to identify the frontiers in forecast accuracy possible given currently available data. By leveraging environmental data and correlations between distinct salmon populations, combinations of modern computational tools were able to reduce out-of-sample error by on average 12% for age-specific forecasts, and 19% for river-specific forecasts. Yet, there were some observations that were not accurately predicted by any method. Given the flexible nature and varying assumptions of our evaluated models, these isolated collective forecast failures help identify when forecast performance is limited by model specification versus the constraints imposed by the nature and quality of available data. Our results demonstrate the utility and limitations of modern computational tools for applied management of natural resources, even when confronted with the short time series and observation error common in ecological systems.  -->
@@ -245,11 +241,17 @@ take a crack at the climate thing
 
 # Title Page {.unnumbered}
 
-## Author Line {.unnumbered}
+## Running Head  {.unnumbered}
+
+Finding Frontiers in Ecological Forecasting
+
+## Title   {.unnumbered}
+
+Identifying Frontiers in Ecological Forecasting with Modern Computational Tools
+
+## List of Authors {.unnumbered}
 
 Daniel Ovando^a^\*, Curry Cunningham^b^,Peter Kuriyama^c^,Christopher Boatright^a^, Ray Hilborn ^a^
-
-## Author Affiliations {.unnumbered}
 
 ^a^School of Aquatic and Fishery Sciences University of Washington 1122 NE Boat St, Box 355020 Seattle, WA 98195-5020
 
@@ -261,19 +263,18 @@ Daniel Ovando^a^\*, Curry Cunningham^b^,Peter Kuriyama^c^,Christopher Boatright^
 
 \*Correspondence should be addressed to Daniel Ovando at [danovan\@uw.edu](mailto:danovan@uw.edu){.email}
 
-## Classification {.unnumbered}
-
-Biological Sciences \> Population Biology
-
-## Keywords {.unnumbered}
-
-Machine learning, predictive modeling, salmon, ecological forecasting, value of information
 
 \newpage
 
 ## Abstract {.unnumbered}
 
 Modern computational tools such as machine learning have transformed predictive fields from advertising to weather forecasting. However, these methods are not yet heavily utilized for managing ecological systems. Salmon are a natural, cultural, and economic keystone of Alaska, and accurate pre-season forecasts of the numbers of sockeye salmon (*Oncorhynchus nerka*), that will return to the river systems of Bristol Bay play an important role in management and harvesting decisions. These predictions are challenging though, given the complex set of dynamic factors that affect salmon. We use data from the salmon populations of Bristol Bay, Alaska, together with a suite of modern forecasting tools, to identify the frontiers in forecast accuracy possible given currently available data. By leveraging dynamic environmental information and correlations between salmon populations, we were able to reduce forecast error by on average `r percent(comp_sys_improvement$imp_on_fri)` relative to a simple mull model, and by XX relative to a benchmark model used in the system. Our results demonstrate the utility and limitations of modern computational tools for applied management of natural resources, even when confronted with the short time series and observation error common in ecological systems.
+
+## Keywords {.unnumbered}
+
+Machine learning, predictive modeling, salmon, ecological forecasting, value of information
+
+\newpage
 
 <!-- ## Significance Statement {.unnumbered} -->
 
@@ -433,7 +434,7 @@ The result that some models outperform others under specific circumstances (e.g.
 system_ensemble_forecast_figure
 ```
 
-## Frontiers in Performance
+## Frontiers in Performance  {.unnumbered}
 
 The underlying assumption of such an ensemble strategy is that the information needed for an accurate forecast is present in the data, and the key is finding the model that is best able to identify and leverage that information. However, no model can find information that simply is not there, or succeed if it is based upon data that is subject to overwhelming observation error. Examining trends in the annual residuals by model and river system shows clear patterns. In some years and river systems, all models perform similarly well, indicating that the information needed for a good forecast was present and detectable by each of the models (e.g. Nushagak before 2015). In other years, only particular models performed well, while others struggled, indicating that information needed for a robust forecast was present but only some models were able to accurately identify the underlying relationship, highlighting the value of ensemble methods (e.g. Naknek between 2005 and 2010). However, in other years and river systems all models struggled, for example the Wood River in 2018 and the Kvichak River in 2014. This provides evidence that the information needed to generate a robust forecast in those years was simply not present in the data that were available at the time (Fig.\@ref(fig:resids)).
 
@@ -481,13 +482,15 @@ In contrast the DLM and machine learning methods both have access to additional 
 
 <!-- What other data should we suggest? We don’t include any in-river condition data, do we just not have it? Thoughts on other places we can invest? [g] -->
 
+# Conclusions  {.unnumbered}
+
 The field of ecology is generally concerned with developing theories and evidence for why ecosystems are structured and behave the ways they do. This pursuit of heuristic understanding can lead to construction of interpretable models that provide insight about system dynamics, but limited predictive power. We designed and optimized our models solely around predictive power, and while some methods such as empirical dynamic modeling and dynamic linear models can provide both insight and predictive skill, the machine learning methods tested here (boosted regression tree and random forests) are focused on prediction alone, with limited scope to improve ecological insight. In the case of natural resources management that often depends on making decisions today based on predictions about the future, prediction-focused methods such as those presented here can present substantial opportunity. <!-- In particular, leveraging multiple different modeling approaches can help uncover otherwise hidden information in available data. As we demonstrate here though, we cannot simply rely on computer age statistical methods to automatically solve problems of prediction in ecology. Even when groups of statistical methods are unable to provide accurate forecasts, using multiple computer age methods as presented here can help identify when these prediction failures are likely due to model misspecification, and when they are do to a simple lack of sufficiently informative data. Computer-age statistical methods then can both improve forecasts and help identify frontiers in predictability in ecological systems given currently available data. Once these borders are found, we can focus efforts and resources on collecting new data that can push our predictive models to greater heights.  -->
 
 <!-- Given the flexible nature and varying assumptions of our evaluated models, these isolated collective forecast failures help identify when forecast performance is limited by model specification versus the constraints imposed by the nature and quality of available data. Our results demonstrate the utility and limitations of modern computational tools for applied management of natural resources, even when confronted with the short time series and observation error common in ecological systems. -->
 
 Accurate forecasts are a crucial part of natural resource management, a task made increasingly challenging by climate change. Our gains in forecast accuracy for the economically and ecologically critical Bristol Bay sockeye salmon fishery demonstrate the ability of modern computational tools to make meaningful improvements in short-term predictive ability for the abundance of natural populations faced with a rapidly changing environment. By combining multiple modern computational tools we are able to identify likely frontiers in forecast performance given currently available data. However, even for this relatively robust dataset we were fundamentally unable to predict the returns of particular river systems and age classes in certain years. The collective failure of multiple methods in specific time steps and locations helps clarify instances in which the only likely path to meaningful forecast improvement is collection of additional data, while also highlighting the potentially irreducible impact of observation error on the limits of forecast performance. It is critical that we allocate resources to both the advancement of predictive modeling methods in ecology, and to the hard work of collecting the data from the natural world that are the foundation of any successful forecasting efforts.
 
-# Funding {.unnumbered}
+# Acknowledgements {.unnumbered}
 
 Funding for this study was provided by the Bristol Bay Regional Seafood Development Association, by the Bristol Bay Seafood Processors, and by Douglas and Joyce McCallum.
 
@@ -503,12 +506,12 @@ All data, code, and package dependencies needed to fully reproduce our results a
 
 <!-- Materials can be accessed at www.github.com/danovando/salmon-forecast-paper -->
 
-# References {.unnumbered}
+# Literature Cited {.unnumbered}
 
 ::: {#refs}
 :::
 
-# Appendix {.unnumbered}
+# Supporting Information {.unnumbered}
 
 \renewcommand{\thefigure}{S\arabic{figure}}
 
