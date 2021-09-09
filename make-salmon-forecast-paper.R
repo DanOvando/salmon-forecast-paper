@@ -10,13 +10,13 @@ functions <- list.files(here::here("functions"))
 
 purrr::walk(functions, ~ source(here::here("functions", .x)))
 
-return_table_year <- 2019
+return_table_year <- 2020
 
 prep_run(
-  results_name = "v1.0.0.9000",
+  results_name = "v1.0.1.9000",
   results_description = "draft publication with boost tree improvements loo starting in 1990",
   first_year = 1990,
-  last_year = 2019,
+  last_year = return_table_year,
   min_year = 1963,
   eval_year = 2000
 )
@@ -27,13 +27,13 @@ message(
 
 options(dplyr.summarise.inform = FALSE)
 
-run_edm_forecast <- FALSE
+run_edm_forecast <- TRUE
 
-run_dlm_forecast <- FALSE
+run_dlm_forecast <- TRUE
 
-run_ml_forecast <- FALSE
+run_ml_forecast <- TRUE
 
-fit_statistical_ensemble <- FALSE
+fit_statistical_ensemble <- TRUE
 
 run_importance <- TRUE
 
@@ -125,7 +125,6 @@ top_age_groups <- str_replace_all(top_age_groups, "\\.", '_')
 results <- list.files(results_dir)
 
 results <- results[str_detect(results, "_loo_results.csv")]
-
 
 observed_returns <- data %>%
   unite(col = "age_group", fw_age, o_age, sep = '_') %>%
@@ -1220,16 +1219,27 @@ top_ensemble <- system_performance %>%
   mutate(combo = paste(system, model, sep = "_"))
 
 
-top_non_ensemble <- system_performance %>%
+fri_performance <- system_performance %>%
   group_by(system) %>%
   filter(model %in% c('fri')) %>%
   filter(srmse == min(srmse)) %>%
   select(system, srmse) %>%
   ungroup()
 
+top_non_ensemble <- system_performance %>%
+  group_by(system) %>%
+  filter(!model %in% c('fri','random_forest_ensemble')) %>%
+  filter(srmse == min(srmse)) %>%
+  select(system, srmse) %>%
+  ungroup() %>% 
+  rename(nonense_srmse = srmse)
+
+
 ensemble_performance <- top_ensemble %>%
+  left_join(fri_performance, by = "system") %>%
   left_join(top_non_ensemble, by = "system") %>%
-  mutate(ens_improvement = 1 - ens_srmse / srmse)
+  mutate(ens_improvement = 1 - ens_srmse / srmse,
+         nonens_improvement = 1 - ens_srmse / nonense_srmse)
 
 
 top_ensemble_system_forecast <- system_forecast %>%

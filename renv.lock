@@ -137,10 +137,10 @@
     },
     "Rcpp": {
       "Package": "Rcpp",
-      "Version": "1.0.5",
+      "Version": "1.0.7",
       "Source": "Repository",
       "Repository": "CRAN",
-      "Hash": "125dc7a0ed375eb68c0ce533b48d291f"
+      "Hash": "dab19adae4440ae55aa8a9d238b246bb"
     },
     "RcppArmadillo": {
       "Package": "RcppArmadillo",
@@ -162,6 +162,13 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "84a03997fbb5acfb3c9b43bad88fea1f"
+    },
+    "RcppThread": {
+      "Package": "RcppThread",
+      "Version": "1.0.0",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "f3d0d01b4333ad47c68136fa13c2f848"
     },
     "Rttf2pt1": {
       "Package": "Rttf2pt1",
@@ -1281,15 +1288,15 @@
     },
     "rEDM": {
       "Package": "rEDM",
-      "Version": "0.7.5",
+      "Version": "1.9.1",
       "Source": "GitHub",
       "RemoteType": "github",
       "RemoteHost": "api.github.com",
       "RemoteRepo": "rEDM",
-      "RemoteUsername": "ha0ye",
+      "RemoteUsername": "SugiharaLab",
       "RemoteRef": "HEAD",
-      "RemoteSha": "ab6e6837a4bf4d0a54e49b26f40e3416c283e721",
-      "Hash": "49a07b5072012773a7fae0a8f9143eb5"
+      "RemoteSha": "bfe4e262a1e152ab9472065e967aa067fb4a0d6c",
+      "Hash": "05d895b502d9aedd758bdd9c599e9c18"
     },
     "ranger": {
       "Package": "ranger",
