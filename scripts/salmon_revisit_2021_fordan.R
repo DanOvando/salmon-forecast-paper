@@ -3,27 +3,27 @@
 #------------------------------------------------------------------------------------
 # options(max.print = 1000, device = 'windows')
 
-# library(plyr)
-# # library(rerddap)
-# library(reshape2)
-# library(tidyverse)
-# library(doParallel)
-# library(lubridate)
-# library(patchwork)
-# library(maps)
-# library(ggmap)
-# # library(ggsidekick)
-# library(devtools)
-# library(patchwork)
+library(plyr)
+# library(rerddap)
+library(reshape2)
+library(tidyverse)
+library(doParallel)
+library(lubridate)
+library(patchwork)
+library(maps)
+library(ggmap)
+# library(ggsidekick)
+library(devtools)
+library(patchwork)
 # devtools::install_github("SugiharaLab/rEDM")
-# library(rEDM)
-# states_map <- map_data("state")
-# world_map <- map_data("world")
+library(rEDM)
+states_map <- map_data("state")
+world_map <- map_data("world")
 
 
 # setwd("C://Users//peter.kuriyama//SynologyDrive//Research//noaa//salmon-forecast-paper")
 
-ldply <- plyr::ldply
+
 ae <- function (y, y_hat) 
 {
   stopifnot(length(y) == length(y_hat), is.numeric(y), is.numeric(y_hat))
@@ -41,7 +41,7 @@ my_mase <- function (y, y_hat, y_prev)
 #------------------------------------------------------------------------------------
 #Age class data
 #------------------------------------------------------------------------------------
-agedat <- read.csv(here("data",paste0(return_table_year,".csv")), stringsAsFactors = FALSE)
+agedat <- read.csv("data/2020.csv", stringsAsFactors = FALSE)
 agedat$age_class <- paste(agedat$fwAge, agedat$oAge)
 # agedat %>% group_by(age_class) %>% summarize(avg_ret = mean(ret)) %>% arrange(desc(avg_ret))
 
@@ -65,7 +65,7 @@ unqs <- agedat %>% distinct(System, unq)
 # nmultiview = 5
 
 
-multiview_years <- function(maxE = 5, year_range = first_year:(last_year - 1), unq_inds = 1:6,
+multiview_years <- function(maxE = 5, year_range = 2000:2019, unq_inds = 1:6,
                             nmultiview = 5){
   
   out <- vector('list', length = length(year_range))
@@ -131,14 +131,14 @@ multiview_years <- function(maxE = 5, year_range = first_year:(last_year - 1), u
 #------------------------------------------------------------------------------------
 #Try all values with dimension 2
 time1 <- Sys.time()
-all2 <- multiview_years(year_range = first_year:(last_year - 1), 
+all2 <- multiview_years(year_range = 2000:2019, 
                       unq_inds=c(1:32), maxE = 2, nmultiview = 1)
 time2 <- Sys.time() - time1; time2
 
 
 
 time1 <- Sys.time()
-all21 <- multiview_years(year_range = first_year:(last_year - 1), 
+all21 <- multiview_years(year_range = 2000:2019, 
                         unq_inds=c(33:36), maxE = 2, nmultiview = 1)
 time2 <- Sys.time() - time1; time2
 
@@ -172,27 +172,4 @@ finalres <- finalres %>% filter(!is.na(predictions))
 finalres <- finalres %>% select(broodYr, retYr, System, age_class, ret, predictions)
 finalres$model <- 'multiview'
 
-
-
-edm_model <- finalres %>%
-  rename(brood_year = broodYr,
-         return_year = retYr,
-         observed_returns = ret,
-         Forecast = predictions) %>% 
-  mutate(age_group = str_replace_all(age_class," ","_")) %>% 
-  select(model,
-         brood_year,
-         return_year,
-         System,
-         age_group,
-         observed_returns,
-         Forecast) %>%
-  mutate(Forecast = Forecast) %>%
-  rename("system" = "System", "predicted_returns" =
-           "Forecast")
-
-# edm_model %>% 
-#   ggplot(aes(observed_returns, predicted_returns)) + 
-#   geom_point()
-
-readr::write_csv(edm_model, path = file.path(results_dir,'edm_loo_results.csv'))
+write.csv(finalres, file = 'results/multiviewres.csv', row.names = FALSE)

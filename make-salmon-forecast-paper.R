@@ -27,11 +27,11 @@ message(
 
 options(dplyr.summarise.inform = FALSE)
 
-run_edm_forecast <- TRUE
+run_edm_forecast <- FALSE
 
-run_dlm_forecast <- TRUE
+run_dlm_forecast <- FALSE
 
-run_ml_forecast <- TRUE
+run_ml_forecast <- FALSE
 
 fit_statistical_ensemble <- TRUE
 
@@ -59,9 +59,6 @@ theme_set(pub_theme)
 
 # run forecasts -----------------------------------------------------------
 
-if (run_edm_forecast) {
-  source(here("scripts", "run-edm-sockeye-forecast.R"))
-}
 
 if (run_dlm_forecast) {
   source(here("scripts", "run-dlm-sockeye-forecast.R"))
@@ -70,10 +67,11 @@ if (run_dlm_forecast) {
 
 if (run_ml_forecast) {
   source(here("scripts", "run-ml-sockeye-forecast.R"))
-
-
 }
 
+if (run_edm_forecast) {
+  source(here("scripts", "run-edm-sockeye-forecast.R"))
+}
 
 
 
@@ -182,6 +180,12 @@ forecasts %>%
 
 # construct statistical ensemble ------------------------------------------
 
+forecasts %>% 
+  ggplot(aes(observed, forecast)) + 
+  geom_abline(slope = 1, intercept = 0) +
+  geom_point() + 
+  facet_wrap(~model)
+
 ensemble_dep_data <- forecasts %>%
   mutate(observed = observed / scalar,
          forecast = forecast / scalar) %>%
@@ -204,7 +208,6 @@ ensemble_data[is.na(ensemble_data)] <- -999
 
 ensemble_data <- ensemble_data %>%
   arrange(year)
-
 if (fit_statistical_ensemble) {
   fit_ensemble <- function(test_year, ensemble_data) {
     message(glue::glue("fitting ensemble through {test_year}"))
@@ -264,7 +267,7 @@ if (fit_statistical_ensemble) {
     
     
     tune_grid <-
-      parameters(min_n(range(2, 10)), mtry(), trees(range(200, 5000)))  %>%
+      parameters(min_n(range(2, 10)), mtry(), trees(range(200, 2500)))  %>%
       dials::finalize(mtry(), x = training_ensemble_data %>% select(-(1:2)))
     
     # tune_grid <-
@@ -281,7 +284,7 @@ if (fit_statistical_ensemble) {
     #   ) %>%
     #   dials::finalize(mtry(), x = training_ensemble_data %>% select(-(1:2)))
 
-    ens_grid <- grid_latin_hypercube(tune_grid, size = 30)
+    ens_grid <- grid_latin_hypercube(tune_grid, size = 25)
 
     # ens_model <-
     #   parsnip::boost_tree(
