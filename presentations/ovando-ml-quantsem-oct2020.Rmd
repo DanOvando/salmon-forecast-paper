@@ -1,0 +1,1413 @@
+---
+title:  Tools and Strategies for Predictive Modeling
+subtitle: Machine Learning and Salmon Forecasting
+author: "Dan Ovando"
+institute: "SAFS Quantitative Seminar Series"
+date: "2021/10/15"
+output:
+  xaringan::moon_reader:
+    # css: xaringan-themer.css
+    lib_dir: libs
+    nature:
+      highlightStyle: github
+      highlightLines: true
+      countIncrementalSlides: false
+      beforeInit: "https://platform.twitter.com/widgets.js"
+---
+
+```{r setup, include=FALSE}
+library(tufte)
+library(knitr)
+library(here)
+library(ranger)
+library(tidyverse)
+library(tidymodels)
+library(vip)
+library(patchwork)
+library(ranger)
+library(xgboost)
+library(neuralnet)
+library(here)
+library(rstanarm)
+library(vip)
+library(pdp)
+library(hrbrthemes)
+library(extrafont)
+
+knitr::opts_chunk$set(dev = "svg", echo = FALSE, message = FALSE, warning = FALSE,
+                      fig.height = 4, fig.width = 8, fig.align = "center")
+
+extrafont::loadfonts()
+
+results_dir <- here("results", "v1.0.1.9000")
+
+
+pub_theme <-
+  hrbrthemes::theme_ipsum(base_size = 14, axis_text_size = 12, axis_title_size =16) +
+  theme(
+    panel.spacing = unit(0.5, "lines"),
+    plot.margin = unit(rep(10, 4), units = "points")
+  )
+
+theme_set(pub_theme)
+
+
+# load plots
+
+load(file = file.path(results_dir, "plots.RData"))
+```
+
+```{r xaringan-themer, include=FALSE, warning=FALSE}
+library(xaringanthemer)
+
+#xaringanthemer::style_mono_light(base_color = "#43418A")
+```
+
+
+# Acknowledgements
+
+The ideas and results here are a result of collaboration with two fantastic groups
+
+*Issues and best practices in machine learning with ecological time series data*
+  Caitlin Allen Akselrud, Curry Cunningham, Dan Ovando, Christine Stawitz, Jordan Watson
+
+
+*Evaluating the potential of modern computational tools in salmon forecasting*
+  Dan Ovando, Curry Cunningham, Peter Kuriyama, Ray Hilborn, Chris Boatright
+
+
+Salmon forecasting work funded by the Bristol Bay Regional Seafood Development Association, by the Bristol Bay Seafood Processors, and by Douglas and Joyce McCallum.
+
+---
+
+
+# [Two Cultures](https://www.jstor.org/stable/2676686)<sup>1</sup>
+
+"Inferential" modeling
+  - What the vast majority of academic statistics is focused on
+  - "What is the effect of X on Y and is it significant enough for me to publish?"
+  - Why does it rain?
+  
+"Predictive" modeling
+  - What industry spends a lot more time doing
+  - "Can I predict Y using X, and is the prediction good enough to be useful?"
+  - Will it rain?
+
+.footnote[
+[1] Adapted from Breiman, L. (2001), “Statistical Modeling: the Two Cultures,” Statistical Science, 16, 199–231. [751]
+
+]
+---
+
+# Any Model Can Be a Predictive Model
+
+... But not every model can be inferential. 
+
+Talking about inferential vs. predictive modeling is often code for "conventional" models that focus on estimating parameters from a data generating process (e.g. linear regression) vs. machine learning. 
+
+- A model can be good at inference but bad at prediction
+  - Think a very well done RCT with a small effect size
+  
+- A model can be good at prediction without being good at inference
+  - Umbrella purchases are a great predictor of local rainfall
+
+- Just because we *understand* a model does that mean it's good for inference?
+
+
+---
+
+# Today's Plan
+
+1. A general predictive modeling framework
+
+2. Machine learning as predictive modeling
+
+3. A quick aside on causal inference
+
+4. Salmon forecasting!
+
+---
+
+class: center, middle, inverse
+
+# The Predictive Modeling Framework
+
+---
+
+# The Predictive Modeling Framework
+
+
+```{r, echo = FALSE, fig.align="center"}
+knitr::include_graphics(here::here("presentations","imgs","flow.png"))
+```
+
+
+---
+
+
+# Why All the Splitting?
+
+We have lots of different ways we might assess aspects of an inferential model
+  - p-values (insert rant here)
+  - Confidence / Credible Intervals
+  - Information criteria (really a proxy for predictive power)
+  
+A predictive model has really only one means of validation: out of sample predictive power
+
+Why out of sample?
+  - Predictive models often have >> parameters than data
+  - Our only test for "learning correlations" vs "memorizing the data"
+
+
+---
+
+# Designing Testing Sets
+
+Good predictive modeling requires that we spend some of our data budget on hold-out testing
+  - Not popular when data are hard / expensive to come by....
+
+Somewhere someone decided that 80%/20% training/testing was a good split
+
+Design of this initial split should reflect the intended use of the model
+
+  - Interpolating?
+  - Extrapolating?
+    - In space?
+    - In time?
+    - Both, etc? 
+
+---
+
+# How you Split Matters
+
+
+```{r, out.width= "65%"}
+knitr::include_graphics(here("presentations","imgs","fig_4.png"))
+```
+ Ovando *et al.* In Review
+
+---
+
+# Designing Analysis and Assessment Splits
+
+Wait, I have to split **more**?? Why??
+
+We rarely just have one model we're considering
+  - Different parameterizations
+  - Different error structures
+  - Different nuisance parameters
+
+But, our only way of judging a model is out-of-sample prediction. 
+
+If we go back and forth with the testing data to make these decisions, it's no longer really testing data
+  - The more degrees of freedom you have, the less of an issue this all is. 
+  
+
+The analysis/assessment splits then become your 'sandbox' training / testing for model development
+
+
+---
+
+# Feature engineering / Data Preprocessing
+
+All done? Nope. 
+
+We need to consider is how to handle any *feature engineering*
+  - Generally called *preprocessing* in the stats literature, because science 
+  
+Examples
+  - Centering and scaling
+  - Dimensional reduction
+
+The key here is avoiding data leakage. E.g. what you can't do is center and scale *and then split* your data. 
+
+Throughout your workflow, all preprocessing that involves any calculation has to be calculated on your training / analysis split and then applied to your analysis / assessment split
+  - We'll cover this a bit more later
+
+
+---
+
+
+
+# Predictive Modeling Worlflow
+
+1. Split data into training and testing
+  - Lock testing data in a vault under the sea
+
+2. Split training data into a series analysis and assessment splits
+  - e.g. repeated v-fold cross validation
+  
+3. Design your feature engineering
+
+4. Design your candidate models
+
+5. Use the analysis and assessment splits to make any decisions to help each model be the best it can be
+
+6. Finally, fit the "best" version of each model to the full training data, assess performance on testing data
+  - Compare to best fit to training data, hope fit didn't go down much
+
+
+
+---
+
+class: center, middle, inverse
+
+Fine, fine, some machine learning models
+
+---
+
+
+# What is Machine Learning?
+
+```{r, echo = FALSE, fig.align="center"}
+knitr::include_graphics("https://imgs.xkcd.com/comics/machine_learning.png")
+```
+
+
+---
+
+# What is Machine Learning?
+
+
+.pull-left[
+
+Artificial Intelligence has been around for a long time!
+
+>The Analytical Engine has no pretensions whatever to originate anything. It can do whatever we know how to order it to perform.... Its province is to assist us in making available what we’re already acquainted with
+>
+> `r tufte::quote_footer('--- Lady Ada Lovelace, 1843')`
+
+]
+.pull-right[
+`r include_graphics(here::here("presentations","imgs","ai-ml-dl.png"))`
+]
+
+.footnote[
+Chollet & Allaire 2018 - Deep Learning with R
+]
+
+???
+In reference to a mechanical computer called the Analytical Engine, referenced by Alan Turing
+---
+
+
+# A Menagerie of Machines
+
+There are **lots** of ML models out there (currently `r nrow(parsnip::model_db)` ML-ish models in the `parsnip` package)
+
+IMO...
+
+1. Given heavy industry use, lots of incentive to develop a model that does marginally better in a specific situation
+  - Marginal gains can translate into lots of money
+  
+2. Tweaking a model is a good way to get a degree?
+
+I'll cover three of the most useful and most common general forms
+
+- Random forests
+
+- Gradient boosted trees
+
+- Neural networks
+
+---
+
+# Random Forests
+
+> "Bunch of stupid trees learning to correct errors of each other"
+>
+> - Vasily Zubarev
+
+- The workhorse and where just about everyone starts in machine learning
+
+- Often near the best, rarely the worst
+
+- Hard to mess up too badly!
+  - Built-in out-of-bag predictions
+  - Creates a perception that switching to ML is as easy as subbing in `ranger` for `lm`?
+
+
+---
+
+
+# A (random) Forest of (regression) Trees
+
+```{r, echo = FALSE, fig.align="center", out.width = "60%"}
+knitr::include_graphics(here("presentations","imgs","nico.png"))
+```
+
+Gutiérrez, N.L., Hilborn, R., Defeo, O., 2011. Leadership, social capital and incentives promote successful fisheries. Nature 470, 386–389. https://doi.org/10.1038/nature09689
+
+
+---
+
+# Random Forests - Pseudocode
+
+I recommend the `ranger` package in R
+
+```{r, echo = FALSE, fig.align="center"}
+knitr::include_graphics(here("presentations","imgs","rf.png"))
+```
+
+[Applied Predictive Modeling](https://link.springer.com/book/10.1007%2F978-1-4614-6849-3)
+
+---
+
+# Random Forests - Key Parameters
+
+All machine learning models have a bunch of tuning or nuisance parameters that need to be set *outside* the model fitting process. This is what the analysis / assessment splits are for
+
+Most models have a few that they are much more sensitive to than others. For random forests, the big ones are
+
+mtry: The number of predictors that will be randomly sampled at each split when creating the tree models.
+
+min_n: The minimum number of data points in a node that are required for the node to be split further.
+
+trees: The number of trees contained in the ensemble.
+  - Fun fact, the *random* in random forests means you can never overfit by having too many trees! Key to efficiency is finding number of trees where performance asymptotes. 
+---
+
+# Gradient boosted trees / [XGBoost](https://xgboost.ai/)
+
+.pull-left[
+
+Gradient boosted trees are another extremely common form of ML model (GAMs are actually a predecessor). 
+
+XGBoost (extreme gradient boosting) is far and away the most popular method, to the point it's sort of a name unto itself. 
+
+XGBoost is ["battle tested"](https://xgboost.ai/), [The most accurate modeling technique for structured data](https://www.kaggle.com/alexisbcook/xgboost), winner of lots of Kaggle competitions, conqueror of worlds, lord of the seven kingdoms, etc.  
+
+
+
+] .pull-right[
+
+```{r}
+knitr::include_graphics("https://media.giphy.com/media/2wYYlHuEw1UcsJYgAA/giphy.gif")
+```
+
+
+]
+
+
+
+---
+
+
+# Gradient boosted trees - Pseudocode
+
+```{r, echo = FALSE, fig.align="center"}
+knitr::include_graphics(here("presentations","imgs","boost.png"))
+```
+[Applied Predictive Modeling](https://link.springer.com/book/10.1007%2F978-1-4614-6849-3)
+---
+
+
+# Gradient boosted trees / [XGBoost](https://xgboost.ai/)
+# Key Parameters
+
+All that performance comes at a cost. In my experience, XGBoost is much more finicky than things like random forests. Key parameters are
+
+
+.small[
+.pull-left[
+mtry: The number of predictors that will be randomly sampled at each split when creating the tree models.
+
+trees: The number of trees contained in the ensemble.
+
+min_n: The minimum number of data points in a node that is required for the node to be split further.
+
+tree_depth: The maximum depth of the tree (i.e. number of splits).
+] .pull-right[
+
+learn_rate: The rate at which the boosting algorithm adapts from iteration-to-iteration.
+
+loss_reduction: The reduction in the loss function required to split further.
+
+sample_size: The amount of data exposed to the fitting routine.
+
+stop_iter: The number of iterations without improvement before stopping.
+
+]
+]
+
+
+---
+
+# Gradient boosted trees / [XGBoost](https://xgboost.ai/)
+# Key Parameters Continued
+
+You see the problem? 
+
+There are a lot of things to tune here, and in my experience many of the defaults aren't well set up for smaller data problems
+
+Tuning is accomplished through versions of grid search, so having a *sense* of the possible parameter space is important
+
+e.g. I've often found that for smaller ecological problems I need slightly higher learn_rate parameters than the grid usually focuses on (default in `dials` is between 1e-10 and 0.1, I've often needed up to like 0.3). 
+
+
+---
+
+
+# Neural Networks
+
+.pull-left[
+
+Random forests and XGBoost are great at things that look a bit more like regression
+  - Predict numbers, classify categories etc
+  
+Neural networks essentially use matrix algebra to transform data into layers of forms that are useful for prediction. 
+
+Crazy powerful, particularly for more complex predictive problems requiring text, images, video, etc. 
+
+Fun fact, best as we can tell the brain does not work like a neural network, it's just a name. 
+].pull-right[
+
+```{r}
+knitr::include_graphics(here("presentations","imgs","cat_nn.png"))
+```
+
+[Deep Learning with R](https://www.manning.com/books/deep-learning-with-r)
+]
+
+---
+
+# Neural Networks
+# Psuedocode
+
+Key thing is matrix algebra. For the details, see [Deep Learning with R](https://www.manning.com/books/deep-learning-with-r)
+
+
+```{r, echo = TRUE}
+
+data = matrix(rnorm(20),10,2) # start with 10 observations and two variables
+
+weights_1 = matrix(rnorm(10),2,5) # weights to transform data into a new layer
+
+layer_1 = data %*% weights_1  # transform into a "5 neuron" layer
+
+weights_2 = matrix(rnorm(10),5,1) # weights to transform data into a new layer
+
+prediction = layer_1 %*% weights_2 # transform back to a single predictor for each observation
+```
+
+
+We had `r nrow(data)` observations and `r sum(dim(weights_1)) + sum(dim(weights_2))` parameters. 
+
+See why we need testing data?
+
+---
+
+
+# Neural Networks - Key Parameters
+
+Way too many to go into here. 
+
+Building block is number of layers and number of nodes per layer, but lots of other fun stuff. 
+
+
+---
+
+# Neural Networks - My Two Cents
+
+.pull-left[
+Unless you are doing some crazy language / image / video things, or have just gobs of data, I'd be skeptical about going the neural network route
+
+If your comfort level is such that you're working with the `neuralnet` package, and your problem is regression-esque, I would start with one of the tree-based methods. 
+
+If you're think a neural network is really the best solution for you, I recommend moving to the source and learning to use
+
+[`keras`](https://keras.rstudio.com/) and [Tensorflow](https://tensorflow.rstudio.com/) rather than a canned front-end
+
+] .pull-right[
+```{r}
+knitr::include_graphics("http://i2.kym-cdn.com/photos/images/original/000/590/940/e4d.jpg")
+```
+
+]
+
+
+---
+
+
+# ML Isn't magic
+
+
+```{r, cache = TRUE, include = FALSE}
+min_years_catch <- 25
+
+min_years_catch <- 25 # minimum years of catch data to include
+
+crazy_b <- 5 # maximum B/Bmsy to allow
+
+crazy_u <- 10 # maximum U/Umsy to allow
+
+catchability <- 1e-3 # survey catchability
+
+
+if (file.exists(here("data", "ram.zip")) == FALSE) {
+  download.file(
+    "https://zenodo.org/record/4824192/files/RAMLDB%20v4.495.zip?download=1",
+    destfile = here("data", "ram.zip"),
+    mode = "wb"
+  )
+  
+  unzip(here("data", "ram.zip"), exdir = here("data", "ram")) # unzip = 'unzip' needed for windows
+}
+
+ram_files <-
+  list.files(here("data", "ram", "R Data"), recursive = TRUE)
+
+ram_files <- ram_files[str_detect(ram_files, ".RData")]
+
+load(here("data", "ram", "R Data", ram_files[1]))
+
+# process ram data ------------------------------------------------------------
+
+stock <- stock %>%
+  left_join(area, by = "areaid")
+# catches
+ram_catches <- tcbest.data %>%
+  mutate(year = rownames(.) %>% as.integer()) %>%
+  as_tibble() %>%
+  gather(stockid, catch, -year)
+
+# B/Bmsy
+ram_b_v_bmsy <- divbpref.data %>%
+  mutate(year = rownames(.) %>% as.integer()) %>%
+  tibble() %>%
+  gather(stockid, b_v_bmsy, -year)
+
+
+# U/Umsy
+ram_u_v_umsy <- divupref.data %>%
+  mutate(year = rownames(.) %>% as.integer()) %>%
+  as_tibble() %>%
+  gather(stockid, u_v_umsy, -year)
+
+# Effort
+ram_effort <- effort.data %>%
+  mutate(year = rownames(.) %>% as.integer()) %>%
+  as_tibble() %>%
+  gather(stockid, effort, -year)
+
+# biomass
+
+ram_total_biomass <- tbbest.data %>%
+  mutate(year = rownames(.) %>% as.integer()) %>%
+  as_tibble() %>%
+  gather(stockid, total_biomass, -year)
+
+# ssb
+
+ram_ss_biomass <- ssb.data %>%
+  mutate(year = rownames(.) %>% as.integer()) %>%
+  as_tibble() %>%
+  gather(stockid, ss_biomass, -year)
+
+
+ram_exp_rate <- ram_catches %>%
+  left_join(ram_total_biomass, by = c("stockid", "year")) %>%
+  mutate(exploitation_rate = catch / total_biomass) %>%
+  select(-catch,-total_biomass)
+
+# put it together
+
+ram_data <- ram_catches %>%
+  left_join(bioparams_values_views, by = "stockid") %>%
+  left_join(ram_b_v_bmsy, by = c("stockid", "year")) %>%
+  left_join(ram_u_v_umsy, by = c("stockid", "year")) %>%
+  left_join(ram_exp_rate, by = c("stockid", "year")) %>%
+  left_join(ram_effort, by = c("stockid", "year")) %>%
+  left_join(ram_total_biomass, by = c("stockid", "year")) %>%
+  left_join(ram_ss_biomass, by = c("stockid", "year")) %>%
+  left_join(stock, by = "stockid") %>%
+  select(stockid, scientificname, commonname, everything())
+
+
+# create new variables
+
+ram_data <- ram_data %>%
+  mutate(tb_v_tb0 = total_biomass / TB0,
+         ssb_v_ssb0 = ss_biomass / SSB0)
+
+# filter data -------------------------------------------------------------
+
+# for now, only include continuous catch series
+
+ram_data <- ram_data %>%
+  filter(is.na(catch) == FALSE) %>%
+  # filter(stockid == "ATBTUNAEATL") %>%
+  group_by(stockid) %>%
+  mutate(delta_year = year - lag(year)) %>%
+  mutate(delta_year = case_when(year == min(year) ~ as.integer(1),
+                                TRUE ~ delta_year)) %>%
+  mutate(missing_gaps = any(delta_year > 1)) %>%
+  filter(missing_gaps == FALSE) %>%
+  mutate(n_years = n_distinct(year)) %>%
+  filter(n_years >= min_years_catch) %>%
+  filter(all(b_v_bmsy < crazy_b, na.rm = TRUE),
+         all(u_v_umsy < crazy_u, na.rm = TRUE)) %>%
+  ungroup() %>%
+  group_by(stockid) %>%
+  mutate(
+    has_tb0 = !all(is.na(TB0)),
+    has_tb = all(!is.na(total_biomass)),
+    first_catch_year = year[which(catch > 0)[1]]
+  ) %>%
+  filter(year >= first_catch_year) %>%
+  mutate(
+    pchange_effort = lead(u_v_umsy) / (u_v_umsy + 1e-6),
+    cs_effort = (u_v_umsy - mean(u_v_umsy)) / sd(u_v_umsy),
+    index = total_biomass * catchability,
+    approx_cpue = catch / (u_v_umsy / catchability + 1e-3),
+    b_rel = dplyr::case_when(
+      has_tb0 ~ total_biomass / max(TB0),
+      has_tb ~ total_biomass / max(total_biomass),
+      TRUE ~ b_v_bmsy / 2.5
+    )
+  ) %>%
+  mutate(approx_cpue = pmin(quantile(approx_cpue, 0.9, na.rm = TRUE), approx_cpue)) %>%
+  ungroup()
+
+ram_data <- ram_data %>%
+  rename(
+    fao_area_code = primary_FAOarea,
+    scientific_name = scientificname,
+    common_name = commonname,
+    capture = catch
+  ) %>%
+  mutate(
+    macroid = paste(scientific_name, fao_area_code, sep = '_'),
+    fao_area_code = as.integer(fao_area_code)
+  )
+
+
+status_model_data <- ram_data %>%
+  mutate(catch = capture) %>%
+  group_by(stockid) %>%
+  mutate(
+    c_div_maxc = catch / max(catch, na.rm = TRUE),
+    c_div_meanc = catch / mean(catch, na.rm = TRUE),
+    fishery_year = 1:length(catch)
+  ) %>%
+  mutate(
+    c_roll_meanc = RcppRoll::roll_meanr(c_div_meanc, 5),
+    c_roll_maxc = catch / cummax(catch),
+    c_init_slope = lm(log(catch[1:10] + 1e-3) ~ year[1:10])$coefficients[2]
+  ) %>%
+  gather(metric, value, b_v_bmsy, u_v_umsy, exploitation_rate) %>%
+  select(stockid,
+         year,
+         contains('c_'),
+         metric,
+         value,
+         fishery_year) %>%
+  mutate(log_value = log(value + 1e-3)) %>%
+  unique() %>%
+  na.omit() %>%
+  ungroup() %>%
+  group_by(stockid) %>%
+  filter(fishery_year > 20) %>%
+  ungroup()
+
+b_data <- status_model_data %>%
+  filter(metric == "b_v_bmsy") %>%
+  left_join(ram_data %>% select(stockid, primary_country, fao_area_code) %>% unique(),
+            by = "stockid")
+
+training_data <- b_data %>%
+  filter(!primary_country %in% c("New Zealand", "Australia", "South Africa"))
+
+
+testing_data <- b_data %>%
+  filter(primary_country %in% c("New Zealand", "Australia", "South Africa"))
+
+
+
+# fit models --------------------------------------------------------------
+
+
+glm_model <-
+  stan_glm(
+    value ~ c_div_maxc + c_div_meanc + c_roll_meanc + c_roll_maxc + c_init_slope + fishery_year,
+    family = Gamma(link = "log"),
+    data = training_data,
+    cores = 4, 
+    chains = 4
+  )
+
+training_data$pred_stanglm <- glm_model$fitted.values
+
+testing_data$pred_stanglm <- colMeans(rstanarm::posterior_epred(glm_model, newdata = testing_data))
+
+
+randomforest_model <-   ranger(
+  value ~ c_div_maxc + c_div_meanc + c_roll_meanc + c_roll_maxc + fishery_year,
+  data = training_data
+)
+
+training_data$pred_randomforest <-  (predict(randomforest_model, data = training_data)$predictions)
+
+testing_data$pred_randomforest <-  (predict(randomforest_model, data = testing_data)$predictions)
+
+
+
+xgb_train <- training_data %>% select(c_div_maxc, c_div_meanc, c_roll_meanc, c_roll_maxc, fishery_year) %>% as.matrix()
+
+xgb_test <- testing_data %>% select(c_div_maxc, c_div_meanc, c_roll_meanc, c_roll_maxc, fishery_year) %>% as.matrix()
+
+xgboost_model <-   xgboost(
+  label = training_data$value, 
+  data = xgb_train,
+  nrounds = 15
+)
+
+training_data$pred_xgboost <-  predict(xgboost_model, newdata = xgb_train)
+
+testing_data$pred_xgboost<-   predict(xgboost_model, newdata = xgb_test)
+
+
+# neuralnet_model <-  neuralnet(
+#   value ~ c_div_maxc + c_div_meanc + c_roll_meanc + c_roll_maxc + c_init_slope,
+#   data = training_data %>% dplyr::sample_n(2000),
+#   hidden = c(2,1),
+#   rep = 1,
+#   stepmax = 1e5,
+#   linear.output=TRUE,
+#   algorithm = "rprop-"
+# )
+
+
+# training_data$neuralnet_pred<-  predict(neuralnet_model, newdata = training_data)
+# 
+# testing_data$xgboost_pred <-   predict(xgboost_model, newdata = xgb_test)
+
+
+# nn <- neuralnet(Petal.Length ~ Petal.Width, iris, hidden = 2, rep = 10)
+# 
+# iris$test = as.numeric(predict(nn, newdata = iris)
+# 
+# iris %>% 
+#   ggplot(aes(Petal.Length, test)) + 
+#   geom_abline(slope = 1, intercept = 0) +
+#   geom_point() 
+
+train <- training_data %>% 
+  pivot_longer(contains("pred_"), names_to = "model", values_to = "Predicted", names_prefix = "pred_") %>% 
+  mutate(split = "Training")
+
+
+test <- testing_data %>% 
+  pivot_longer(contains("pred_"), names_to = "model", values_to = "Predicted", names_prefix = "pred_") %>% 
+  mutate(split = "Testing")
+
+compare <- train %>% 
+  bind_rows(test)
+
+```
+
+```{r}
+compare %>% 
+  mutate(split = forcats::fct_relevel(split, "Training")) %>% 
+  ggplot(aes(value, Predicted, color = model)) + 
+  geom_abline(slope = 1, intercept = 0)+
+  geom_point(alpha = 0.25) + 
+  geom_smooth(method = "lm") +
+  facet_wrap(~split)
+
+```
+
+Note: I tried to include a neural network from the `neuralnet` package here but couldn't get it to work within the time I alloted myself for this. Which kind of proves my point. 
+
+---
+
+# Uncertainty
+
+More or less, ML models don't tell you anything about uncertainty (though there are new methods on this). 
+
+But, mostly the main way at this time would be to bootstrap the data. 
+
+That's all I have here. 
+
+
+---
+
+# A quick note on [`tidymodels`](https://www.tidymodels.org/)
+
+.pull-left[
+
+So, you need to
+
+1. Generate your splits
+2. Develop candidate models
+3. Fine-tune candidate models across factorial combinations of nuisance parameters
+4. Find the best version of candidate models and fit to full training data
+5. Test final models on testing data
+
+Thankfully, `parsnip` (the heir to `caret`, get it?)  and `tidymodels` are [here to help](https://www.tidymodels.org/start/case-study/) (in R)
+
+Upcoming book [here](https://www.tmwr.org/)
+
+].pull-right[
+
+```{r}
+knitr::include_graphics("https://www.tidymodels.org/images/cover.png")
+```
+
+
+]
+
+---
+
+
+class: middle, center, inverse
+# I Demand Understanding!
+
+
+---
+
+# Thinking Outside the Black Box 
+
+Machine learning models are powerful tools because they can "learn" complex correlations that "simpler" models might miss. 
+
+  - Removes need for crazy factorial tables of interaction terms and polynomials
+
+But, there's no such thing as a free lunch. 
+
+All that predictive power comes at a price, and that's *understanding* (or *inference* if you want to link it back to the opener)
+
+This comes from two places
+
+1. It's hard for us to visualize really complex interactions
+  - Maybe helped by variable importance scores and partial dependency plots
+  
+2. The fundamental problem of causal inference
+  - We'll come back to this... 
+
+
+---
+
+
+# Variable Importance Scores
+
+Variable importance scores are a very popular way of trying to "understand" ML models
+
+In tree based methods, they are a measure of how much a given variable improves the prediction when included in a model (more or less)
+  - Remember a random forest has to decide which variables has to include in a tree node. The frequency with which a given variable is selected as a useful node influence the importance score. 
+  
+This sounds a lot like a regression coefficient right? Suppose model is
+
+$$y = 1000 \times x +.001 \times z $$
+
+Clearly $x$ is going to be a much more useful predictor of $y$ than $z$
+
+A variable importance score is **not the same** as a regression coefficient though
+
+---
+
+
+# Variable Importance Scores
+
+Suppose the model of a process is
+
+$$y_i = 25 \times x_i + 50 \times z_i -10 \times z_i \times w_i$$
+$x$ and $z$ are both real numbers, $w_i \in \{-1,1\}$
+
+We can fit the following two models and compare the model coefficients and the variable importance scores
+
+```{r}
+n <- 1000
+
+x <- rnorm(n,10,1)
+
+z <- rnorm(n,-10,1)
+
+w <- sample(c(-1,1), n, replace = TRUE) # w is a switch that controls the direction of the effect of z
+
+y <- 25 * x + -10*z*w + 50 *z # true model
+
+dat <- data.frame(x = x, z = z, y = y, w = w)
+```
+
+
+```{r, echo = TRUE}
+linear_model <- lm(y ~ x + z + z:w + w, data = dat) # correctly specified linear regression
+
+ml_model <- ranger(y ~ x + z + w, data = dat, importance = "impurity") # random forest
+
+```
+
+
+
+---
+
+# Variable Importance Scores
+
+$$y_i = 25 \times x_i + 50 \times z_i -10 \times z_i \times w_i$$
+
+```{r, warning=FALSE, out.width="100%", fig.align="center"}
+lm_mod <- broom::tidy(linear_model) %>%
+  select(term, estimate) %>%
+  filter(term != "(Intercept)")
+
+lm_plot <- lm_mod %>% 
+  ggplot(aes(term, estimate)) + 
+  geom_hline(aes(yintercept = 0)) +
+  geom_col() + 
+  scale_x_discrete(name = '') +
+  scale_y_continuous(name = "Estimated Coefficient") +
+  labs(title = "Linear regression")
+
+# w shows up as the most important variable by a landslide, despite
+# actually only being a switch on the effect of z. But, you can't understand the actually big effect of z without understanding w, so it is in fact very important, but it's because it helps you explain the
+# effect of z
+ml_mod <- ml_model %>% 
+  vi() %>% 
+  arrange(desc(Importance)) 
+
+ml_plot <- ml_mod %>% 
+  ggplot(aes(Variable, Importance)) + 
+  geom_hline(aes(yintercept = 0)) +
+  geom_col() + 
+  scale_x_discrete(name = '') +
+  scale_y_continuous(name = "Variable Importance") +
+  labs(title = "Random Forest")
+
+
+vip_plot <- lm_plot + ml_plot
+
+vip_plot
+```
+
+---
+
+# Variable Importance Scores
+
+The flip side: Can tell you something when your model is misspecified
+
+```{r, out.height="80%", fig.height=4}
+knitr::include_graphics(here("presentations","imgs","lm_vs_varimp.png"))
+```
+
+
+---
+
+# Partial Dependency Plots
+
+OK, so we've seen how interactions can throw off variable importance, at least as a proxy for regression coefficients. What about partial dependency plots? 
+
+These sound a lot more like marginal effects: hold everything else constant, vary the parameter of interest, look at how the outcome changes as a function of the parameter. 
+
+Suppose model looks like this
+
+$$y_i = 0.2 \times x \times z$$
+
+x is a real number, $z_i \in \{-1,1\}$
+
+Let's fit a random forest and examine the partial dependency plot
+
+
+---
+
+
+# Partial Dependency Plots
+
+```{r}
+tmp <- tibble(x = seq(-10,10, by = .01))
+
+pd_data <- tmp %>% 
+  bind_rows(tmp) %>% 
+  mutate(z = sample(c(1,-1), nrow(.), replace = TRUE)) %>% 
+  mutate(y = .2 * x * z)
+
+pd_data_plot <- pd_data %>% 
+  ggplot(aes(x,y)) + 
+  geom_point()
+```
+
+```{r, echo = TRUE}
+
+pd_model <- ranger(y ~ x + z, data = pd_data)
+
+pd_plot <- pdp::partial(pd_model, pred.var = "x", plot = TRUE,
+                             plot.engine = "ggplot2",ice = TRUE)
+```
+
+
+```{r,out.width="100%", fig.align="center"}
+pd_plot + 
+  geom_point(data = pd_data, aes(x,y, color = factor(z)), alpha = 0.25)
+```
+???
+
+Point out value of dimensional reduction or variable selection here
+
+---
+
+
+class: center, middle, inverse
+
+# and now for something sort of related
+
+
+---
+
+
+# I Demand Understanding!
+
+OK, so we've seen how hard it can be to interpret machine learning models (though variable importance and partial dependency plots can help!)
+
+But if your model has complex interactions, translating these metrics into inference can be hard. 
+
+All that may lead you to say **no thank you** I'll stick with my linear regression. 
+
+Perfectly reasonable, but beware the trap of *poor prediction* **and** *poor inference*
+
+
+---
+
+# Fun with Causal Inference
+
+A common reason for sticking with linear regression is that we can *understand* it and so we can make *inference* based on our results.
+
+We also usually want to say that our *inferences* are *causal*
+
+  - Not only is *x* correlated with *y*, but *x* in fact *causes* y
+  
+Linear regression can help us understand the former, but is in no way guaranteed to give us the later.
+
+
+---
+
+# Fun with Causal Inference<sup>1</sup>
+
+.pull-left[
+
+We all know that "correlation does not equal causation"
+
+Why not?
+
+A big reason in the context of linear regression is "omitted variable bias"
+
+Consider a data generating process of the form
+
+$$y_i = \beta_0 + \beta_1x_i + \beta_2z_i + \epsilon_i$$
+Where $\epsilon$ is IID 
+
+
+].pull-right[
+
+```{r}
+knitr::include_graphics("https://www.bradshawfoundation.com/bfnews/uploads/alex.JPG")
+```
+
+]
+
+.footnote[
+[1] Adapted from Olivier Deschenes 
+]
+
+---
+
+
+# Fun with Causal Inference<sup>1</sup>
+
+$$y_i = \beta_0 + \beta_1x_i + \beta_2z_i + \epsilon_i$$
+
+Our goal is to estimate the causal effect of $x$. What happens though if we omit $z$ from our regression?
+
+$$y_i = \beta_0 + \beta_1x_i + \mu_i$$
+$$\mu_i =  \beta_2z_i + \epsilon_i$$
+In order for our estimate of $\beta_1$ to be causal, we need the errors to be *conditionally independent* of $x$
+
+$$E[\mu_i|x_i] =0$$
+
+
+.footnote[
+[1] Adapted from Olivier Deschenes 
+]
+
+
+---
+
+# Fun with Causal Inference<sup>1</sup>
+
+$$E[\mu_i|x_i] =0$$
+
+Does this hold?
+
+We can do some math, and show the degree to which this is true, and the impact on our estimate of $\beta_1$ is given by
+
+$$\lim_{n\to \infty}\hat{\beta_1} =  \beta_1 + \beta_2\rho_{x,z}\frac{\sigma_z}{\sigma_x}$$
+$$\rho_{x,z} = corr(x,z)$$
+
+What this means is that no matter how many samples $n$ we collect, our estimate of the causal effect of $x$, $\beta_1$, will be biased proportional to the correlation between $x$ and the omitted variable and the effect of $z$ on the outcome $y$
+
+.footnote[
+[1] Adapted from Olivier Deschenes 
+]
+---
+
+# Fun with Causal Inference
+
+$$\lim_{n\to \infty}\hat{\beta_1} =  \beta_1 + \beta_2\rho_{x,z}\frac{\sigma_z}{\sigma_x}$$
+The net result of omitted variable bias
+
+- This is why we can safely omit kangaroos from our arctic char model 
+- We're also fine omitting things from regression even if they affect the outcome if they're uncorrelated with the thing we care about
+  - Weather & Weekend's effect on fishing effort
+- This is also why stepwise selection is a **very bad idea** in regressions
+  - As you omit correlated things, suddenly your variable of interest magically becomes significant! <sup>1</sup>
+  
+  
+.footnote[
+[1] With finite samples though including lots of highly correlated predictors also causes problems, see me with beers sometime
+]
+
+---
+
+# So what is the solution to this?<sup>1</sup>
+
+1) Randomized control trial
+  - Sure would be nice. 
+
+2) Selection on observables
+
+This is fancy speak for "I've included everything that could possibly matter in my regression"
+
+This is often what is *implicitly* invoked in regression models
+
+"We know that correlation doesn't imply causation **but** look at how well this one correlation lines up with our theory, and we included a lot of other controls, so if we *were* to interpret it causally..."
+
+Saying this three times in the mirror summons a grumpy economist as Reviewer #2
+
+.footnote[
+[1] DAGs and do-calculus are another strategy, not getting into it here
+]
+
+---
+
+# Fun with Causal Inference
+
+.pull-left[
+
+3) Natural experiments 
+
+Empirical economics is focused on the causal effects of policies that we often can't test with RCTs. 
+
+David Card, Joshua Angrist, and Guido Imbens shared this years economics Nobel Prize for their work developing methods for using natural experiments in causal inference.
+
+ *Control for unobserved variables that could bias causal estimates*.
+
+Allows you to invoke more direct assumptions than "we probably controlled for everything that matters?"
+
+] .pull-right[
+```{r, out.width="200%"}
+
+
+knitr::include_graphics("https://products.lanree.com/pics/0355/9780691120355_20191127_174237.jpg")
+```
+
+]
+
+---
+
+# Back to Predictive Modeling
+
+.pull-left[
+
+All this is to say, just because it's easier to interpret
+
+$$y_i = \beta_1 x_i + \beta_0$$
+Than a neural network doesn't mean it's automatically giving us more insight into *causal mechanisms*. 
+
+Avoid a pitfall of poor prediction *and* poor inference!
+
+If I'm considering a structural model, I'll sometimes run an ML version and compare the predictive power of the two models. 
+
+Gives me a sense for how well my imposed structure is representing the patterns seen in the data. 
+
+<!-- If goal is just prediction, might be worth giving up some understanding  -->
+
+<!-- If goal is understanding, be clear about the mechanism getting you there.  -->
+
+
+
+].pull-right[
+```{r, out.width="70%"}
+knitr::include_graphics(here("presentations","imgs","r2.png"))
+
+
+```
+
+Møller, A.P., Jennions, M.D., 2002. How Much Variance Can Be Explained by Ecologists and Evolutionary Biologists? Oecologia 132, 492–500.
+
+
+]
+
+---
+
+class: center, middle, inverse
+
+# Salmon Forecasting
+
+
+---
+
+
+# Things are Changing
+
+```{r, fig.height=5.5, fig.align="center"}
+return_plot
+```
+
+
+---
+
+# Salmon Forecasting Models
+
+Traditional forecasting models:
+
+1. Fit individually per age group and assuming independence per system
+
+2. Generally based on sibling regression: assumes a linear relationship between say returns of age 3 individuals and age 2 individuals. 
+
+Project goal: Can inclusion of models that allow for dynamics and interactions improve pre-season sockeye forecasts?
+
+1. ML Models (random forest, XGBoost, neural network)
+
+2. Dynamic Linear Models (Curry Cunningham)
+
+3. Empirical Dynamic Models (Peter Kuriyama)
+
+---
+
+# Development and Testing Regime
+
+
+Goal is 1-year ahead forecasts for each river system
+
+Starting in 2000, generate 1-year ahead rolling forecasts
+
+  - For year 2000, include 1963-1999 in training data
+  - Split 1963-1999 training data into set of rolling analysis and assessment splits, e.g. 1963-1985, predict 1986, 1963-1986, predict 1987, etc. 
+  - Use rolling splits to tune individual models
+  - Fit best individual model config. to training split
+  - Generate forecast for testing year
+  - Move on to the next year
+
+---
+
+# Model Evaluation
+
+We assessed performance relative to a lag-1 baseline model, where the forecast for year X is equal to the observed returns in year X-1
+
+```{r, fig.height=5}
+age_forecast_figure
+```
+
+
+---
+
+
+# Generating a Forecast
+
+OK, so we have multiple models, how do we choose?
+
+1. Pick best model for that age group + system
+
+2. Generate an ensemble model based on past performance
+  - This is what the FRI has historically done, but more qualitatively
+  - Assess rolling performance of each model from 1990 to current year
+  - Train rolling ensemble model based on historic performance, essentially dynamics weighting of individual models
+  - Generate forecast by system and age group using ensemble model
+
+
+---
+
+# Ensemble Results
+
+```{r,fig.height=5.5}
+system_ensemble_forecast_figure
+```
+
+
+---
+
+# All Models are Wrong
+
+```{r,fig.height=5.5}
+yearly_system_resid_struggles_figure
+```
+
+
+---
+
+
+# Thoughts on the Salmon Process
+
+- Across model differences are small and probably more chance than structure
+
+- For ML models, feature engineering makes a big difference
+  - Structuring of cohort strength
+  - Environmental covariate timing and location
+  
+- Multiple highly flexible models help rule out model misspecification as explanation for poor forecasts
+  - Helps rule out "We modeled it as $y = x$ but it was really $y = x + x^2$" errors
+  
+- Highlights systems and years where likely information for a better forecast was not present in the data
+  - What went weird those years?
+
+---
+
+
+# The Take Home
+
+- Any model can be predictive. But a *predictive* model requires a different workflow than an *inferential* model
+  - It's not as simple as replacing `lm` with `ranger`
+
+- If we don't care about inference, machine learning models can be a powerful tool for finding "hidden" predictive structure in data
+  - There are tools to help understand the "why" of ML models, but they aren't the same
+
+- Machine learning models can help find the predictive limit of your data
+  - Is your poor fit lack of informative data or model misspecification?
+
+- Synthetic controls as an interesting merging of the "two cultures"?
+  - Use imperfect controls to generate a synthetic predicted control
+
+- Machine learning isn't magic: it's another useful tool in your toolbox, use appropriately. 
+
+---
+
+# Thanks!
+
+.pull-left[
+email: danovan@uw.edu
+
+github: DanOvando
+
+twitter: @danovand0
+
+website: www.danovando.com
+].pull-right[
+Machine learning will solve everything...
+<blockquote class="twitter-tweet" data-conversation="none"><p lang="en" dir="ltr">I wish they had also created a diverse dataset of rugs so that it didn’t confuse black stripes with cliffs and I could finally get my entire house cleaned 😂 <a href="https://t.co/zgPza5pyYw">pic.twitter.com/zgPza5pyYw</a></p>&mdash; Dmitry Krotov (@DimaKrotov) <a href="https://twitter.com/DimaKrotov/status/1436150021792149506?ref_src=twsrc%5Etfw">September 10, 2021</a></blockquote> <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script> 
+]
+
+---
+
+# The Golem and the Astrologist
+
+Richard McElreath refers to statistical models as "golems", an animated robot of Jewish folklore, due to their power, clumsiness, and very literal interpretation of commands.  
+
+The statistical golems in this telling are concerned with a pursuit of "truth" by whatever methods they can. 
+
+Predictive models are a somewhat different beast though, perhaps better described by the philosopher Douglas Adams
+
+> In astrology the rules happen to be about stars and planets, but they could be about ducks and drakes for all the difference it would make. It's just a way of thinking about a problem which lets the shape of that problem begin to emerge. The more rules, the tinier the rules, the more arbitrary they are, the better. It's like throwing a handful of fine graphite dust on a piece of paper to see where the hidden indentations are
+> - Douglas Adams - Mostly Harmless
+
+???
+
+the Golem is about process and structure, whereas in Adam's telling here in astrology the ends justify the means. This is somewhat similar to the philosophy of predictive models, it's not about the dust or the ducks, it's about the things they predict for us and the degree to which those predictions are true and helpful to us
+---

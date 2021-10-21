@@ -10,13 +10,13 @@ functions <- list.files(here::here("functions"))
 
 purrr::walk(functions, ~ source(here::here("functions", .x)))
 
-return_table_year <- 2019
+return_table_year <- 2020
 
 prep_run(
-  results_name = "v1.0.0.9000",
+  results_name = "v1.0.1.9000",
   results_description = "draft publication with boost tree improvements loo starting in 1990",
   first_year = 1990,
-  last_year = 2019,
+  last_year = return_table_year,
   min_year = 1963,
   eval_year = 2000
 )
@@ -59,9 +59,6 @@ theme_set(pub_theme)
 
 # run forecasts -----------------------------------------------------------
 
-if (run_edm_forecast) {
-  source(here("scripts", "run-edm-sockeye-forecast.R"))
-}
 
 if (run_dlm_forecast) {
   source(here("scripts", "run-dlm-sockeye-forecast.R"))
@@ -70,10 +67,11 @@ if (run_dlm_forecast) {
 
 if (run_ml_forecast) {
   source(here("scripts", "run-ml-sockeye-forecast.R"))
-
-
 }
 
+if (run_edm_forecast) {
+  source(here("scripts", "run-edm-sockeye-forecast.R"))
+}
 
 
 
@@ -126,18 +124,18 @@ results <- list.files(results_dir)
 
 results <- results[str_detect(results, "_loo_results.csv")]
 
-
 observed_returns <- data %>%
   unite(col = "age_group", fw_age, o_age, sep = '_') %>%
   select(system, age_group, ret_yr, ret) %>%
   rename(observed = ret)
+
+observed_returns$observed[observed_returns$observed < .001] <- 0 #anything less than 1 fish goes to 0
 
 observed_salmon <- observed_returns %>%
   group_by(ret_yr, age_group) %>%
   summarise(observed = sum(observed)) %>%
   ungroup() %>%
   rename(year = ret_yr)
-
 
 published_forecasts %>%
   group_by(year, age_group) %>%
@@ -182,6 +180,12 @@ forecasts %>%
 
 # construct statistical ensemble ------------------------------------------
 
+forecasts %>% 
+  ggplot(aes(observed, forecast)) + 
+  geom_abline(slope = 1, intercept = 0) +
+  geom_point() + 
+  facet_wrap(~model)
+
 ensemble_dep_data <- forecasts %>%
   mutate(observed = observed / scalar,
          forecast = forecast / scalar) %>%
@@ -204,7 +208,6 @@ ensemble_data[is.na(ensemble_data)] <- -999
 
 ensemble_data <- ensemble_data %>%
   arrange(year)
-
 if (fit_statistical_ensemble) {
   fit_ensemble <- function(test_year, ensemble_data) {
     message(glue::glue("fitting ensemble through {test_year}"))
@@ -264,7 +267,7 @@ if (fit_statistical_ensemble) {
     
     
     tune_grid <-
-      parameters(min_n(range(2, 10)), mtry(), trees(range(200, 5000)))  %>%
+      parameters(min_n(range(2, 10)), mtry(), trees(range(200, 2500)))  %>%
       dials::finalize(mtry(), x = training_ensemble_data %>% select(-(1:2)))
     
     # tune_grid <-
@@ -281,7 +284,7 @@ if (fit_statistical_ensemble) {
     #   ) %>%
     #   dials::finalize(mtry(), x = training_ensemble_data %>% select(-(1:2)))
 
-    ens_grid <- grid_latin_hypercube(tune_grid, size = 30)
+    ens_grid <- grid_latin_hypercube(tune_grid, size = 25)
 
     # ens_model <-
     #   parsnip::boost_tree(
@@ -468,10 +471,6 @@ total_ensemble_forecasts <- ensemble_forecasts %>%
   select(year, model, observed, forecast) %>%
   ungroup()
 
-# forecasts <- forecasts %>%
-#   bind_rows(ensemble_forecasts)
-
-
 # create performance summaries
 
 total_forecast <- forecasts %>%
@@ -533,11 +532,127 @@ system_forecast_plot <- system_forecast %>%
 
 system_forecast_plot
 
-# evaluate performance
+# rolling performance -----------------------------------------------------
+# examine performance on a rolling basis: by system and age group and totals. So in each year figure out the best individual model for that system / age group in the past, and then choose that one. How the hell do you do the ensemble at this point?
+
 mase_foo <- function(observed, forecast, lag_mae) {
   mase <- mean(abs(observed - forecast)) / mean(lag_mae)
-
+  
 }
+
+rollfoo <- function(tmp,y){
+  
+  rolling_age_system_performance <- tmp %>%
+    group_by(age_group, system) %>%
+    mutate(lag_mae = mean(abs(observed[model == "lag"] - forecast[model == "lag"]))) %>%
+    group_by(age_group, system, model) %>%
+    arrange(year) %>%
+    summarise(
+      rmse = yardstick::rmse_vec(truth = observed, estimate = forecast),
+      r2 = yardstick::rsq_vec(truth = observed, estimate = forecast),
+      ccc = yardstick::ccc_vec(truth = observed, estimate = forecast),
+      mape = yardstick::mape_vec(truth = observed, estimate = forecast),
+      mae = yardstick::mae_vec(truth = observed, estimate = forecast),
+      mase = mase_foo(
+        observed = observed,
+        forecast = forecast,
+        lag_mae = lag_mae
+      ),
+      bias = mean(forecast - observed)
+    ) %>%
+    ungroup() %>%
+    group_by(age_group, system) %>%
+    mutate(srmse = rmse / rmse[model == "lag"],
+           year = y) %>%
+    ungroup()
+  
+  
+}
+
+rollyears <- unique(age_system_forecast$year)
+
+tmplist <- vector(mode = "list", length = length(rollyears))
+for (y in seq_along(rollyears)){
+  
+  tmplist[[y]] <- rollfoo(age_system_forecast %>% filter(year < rollyears[y]), y = rollyears[y])
+  
+}
+
+rolling_age_system_performance <- bind_rows(tmplist)
+
+rolling_fri_age_system_performance <- rolling_age_system_performance %>% 
+  filter(model %in% c('random_forest_ensemble', 'fri'))
+
+rolling_age_system_performance <- rolling_age_system_performance %>% 
+  filter(!model %in% c('random_forest_ensemble', 'fri')) %>%
+  group_by(age_group, system, year) %>% 
+  filter(srmse == min(srmse)) %>% 
+  filter(year > 2010)
+
+rolling_age_system_performance %>% 
+  ggplot(aes(year, age_group, fill = model)) + 
+  geom_tile() + 
+  facet_wrap(~system)
+
+rolling_age_system_performance
+
+frish_forecast <- age_system_forecast %>% 
+  right_join(rolling_age_system_performance, by = c("system","age_group", "year","model")) 
+
+frish_forecast %>% 
+  ungroup() %>% 
+  ggplot() + 
+  geom_area(aes(year, observed)) +
+  geom_line(aes(year, forecast), color = "red") +
+  geom_point(aes(year, forecast, color = model)) +
+  facet_grid(age_group ~ system, scales = "free_y")
+
+fri_forecast <- age_system_forecast %>% 
+  filter(model == "fri") %>% 
+  select(-observed,-model) %>% 
+  rename(fri_forecast = forecast)
+
+frish_forecast <- frish_forecast %>% 
+  left_join(fri_forecast, by = c("year","system","age_group")) %>% 
+  mutate(frish_error = forecast - observed,
+         fri_error = fri_forecast - observed,
+         pe = fri_error / observed) %>% 
+  mutate(delta = (frish_error - fri_error))
+
+
+frish_forecast %>% 
+  select(year, system, age_group, frish_error, fri_error) %>% 
+  pivot_longer(contains("_error"), names_to = "model", values_to = "error") %>% 
+  ggplot(aes(year, error, fill = model)) +
+  geom_col(position = "dodge") + 
+  facet_grid(age_group ~ system, scales = "free_y")
+
+frish_forecast %>% 
+  ggplot(aes(year, delta)) +
+  geom_col(position = "dodge") + 
+  facet_grid(age_group ~ system, scales = "free_y")
+
+a = frish_forecast %>% 
+  group_by(system, age_group) %>% 
+  summarise(frish_rmse = rmse_vec(observed, forecast),
+            fri_rmse = rmse_vec(observed, fri_forecast),
+            observed= sum(observed))
+a
+mean(a$frish_rmse < a$fri_rmse)
+
+frish_age_system_forecast <- frish_forecast %>%
+  group_by(year, system, age_group) %>%
+  summarise(observed = sum(observed),
+            forecast = sum(forecast)) %>%
+  mutate(model = "FRI-Style Forecast") %>% 
+  select(year, age_group, system,model, observed, forecast) %>%
+  ungroup()
+
+
+# age_system_forecast <- age_system_forecast %>% 
+#   bind_rows(frish_age_system_forecast)
+
+# evaluate performance
 
 
 age_system_performance <- age_system_forecast %>%
@@ -1107,16 +1222,27 @@ top_ensemble <- system_performance %>%
   mutate(combo = paste(system, model, sep = "_"))
 
 
-top_non_ensemble <- system_performance %>%
+fri_performance <- system_performance %>%
   group_by(system) %>%
-  filter(!model %in% c('random_forest_ensemble', 'fri')) %>%
+  filter(model %in% c('fri')) %>%
   filter(srmse == min(srmse)) %>%
   select(system, srmse) %>%
   ungroup()
 
+top_non_ensemble <- system_performance %>%
+  group_by(system) %>%
+  filter(!model %in% c('fri','random_forest_ensemble')) %>%
+  filter(srmse == min(srmse)) %>%
+  select(system, srmse) %>%
+  ungroup() %>% 
+  rename(nonense_srmse = srmse)
+
+
 ensemble_performance <- top_ensemble %>%
+  left_join(fri_performance, by = "system") %>%
   left_join(top_non_ensemble, by = "system") %>%
-  mutate(ens_improvement = 1 - ens_srmse / srmse)
+  mutate(ens_improvement = 1 - ens_srmse / srmse,
+         nonens_improvement = 1 - ens_srmse / nonense_srmse)
 
 
 top_ensemble_system_forecast <- system_forecast %>%
@@ -1125,22 +1251,22 @@ top_ensemble_system_forecast <- system_forecast %>%
   left_join(ensemble_performance, by = c("system", "model"))
 
 system_ensemble_forecast_figure <- top_ensemble_system_forecast %>%
-  mutate(model = snakecase::to_title_case(model)) %>%
+  mutate(model = fct_recode(model, FRI = "fri",
+         "Random Forest Ensemble" = "random_forest_ensemble")) %>% 
   ggplot() +
-  geom_area(aes(year, observed), fill = "darkgray") +
+  geom_area(aes(year, observed), fill = "darkgray", alpha = 0.8) +
+  geom_line(aes(year, forecast,group = model),alpha = 0.5) +
   geom_point(
     aes(year, forecast, shape = model, fill = ens_improvement),
     size = 2,
     alpha = 0.95
   ) +
-  scale_fill_gradient2(
-    low = "tomato",
+  scale_fill_gradient(
+    low = "white",
     high = "steelblue",
-    mid = "white",
-    midpoint = 0,
     labels = label_percent(accuracy = 1),
     guide = guide_colorbar(frame.colour = "black", ticks.colour = "black"),
-    name = "% Ensemble Improvement"
+    name = "Ensemble Improvement"
   ) +
   # fishualize::scale_fill_fish_d(option = "Trimma_lantana") +
   # fishualize::scale_color_fish_d(option = "Trimma_lantana") +
@@ -1521,19 +1647,63 @@ if (file.exists(file.path(results_dir, "next_forecast.rds"))) {
       group_by(pred_system, short_feature) %>%
       summarise(mean_importance = mean(Gain))
 
+    
+    # Japan		Japan & South Korea
+    # M&I		Russia: Mainland & Islands
+    # WKam		Western Kamchatka
+    # EKam		Eastern Kamchatka
+    # WAK		Western Alaska
+    # SPen		Southern Alaska Peninsula
+    # Kod		Kodiak
+    # CI		Cook Inlet
+    # PWS		Prince William Sound
+    # SEAK		Southeast Alaska
+    # NBC		Northern British Columbia
+    # SBC		Southern British Columbia
+    # WA		Washington State
+    # WC		West Coast USA
+    
+    
+    region_lookup <- read_csv(here("data","region_lookup.csv")) %>% 
+      pivot_wider(names_from = abrev, values_from = region) %>% 
+      janitor::clean_names() %>% 
+      pivot_longer(tidyselect::everything(),names_to = "abrev", values_to = "region") 
+      
+      salmonids <- expand_grid(salmon = c("chum","pink"), abrev = region_lookup$abrev) %>% 
+        left_join(region_lookup, by = "abrev") %>% 
+        mutate(lookup = paste(salmon, abrev, sep = "_"),
+               name = paste(snakecase::to_title_case(salmon), region, sep = ": ")) %>% 
+        select(lookup, name) %>% 
+        mutate(Description = "Natural origin salmon returns",
+               Source = "Ruggerone and Irvine (2018)")
+      
+      return_lookup <- tibble(lookup = paste0("past_", unique(data$system))) %>% 
+        mutate(name = str_replace_all(lookup, "past_", "Past ")) %>% 
+        mutate(Description = "Past river system returns",
+               Source = "FRI")
+    
+      
+      painful_lookup <- tribble(~"lookup",~"name",~"Description",~"Source",
+                                "env_sst", "Sea Surface Temperature","Median Bristol Bay SST between May-August in year cohort entered ocean.","ERDDAP HadISST",
+                                "env_slp", "Sea Level Pressure","Median Bristol Bay SLP between May-August in year cohort entered ocean.","ERDDAP ICOADS",
+                                "env_pdo", "Pacific Decadal Oscillation","Mean PDO index between May-August in year cohort entered ocean.","JISAO",
+                                "env_upstr", "Wind Stress","Median Bristol Bay wind stress between May-August in year cohort entered ocean.","ERDDAP ICOADS",
+                                "ret_yr", "Return Year","","",
+                                "spawner_strength","Spawner Numbers","Number of parents","FRI") %>% 
+        rbind(salmonids) %>% 
+        rbind(return_lookup)
+      
+    
+    system_importance_table <- system_importance %>% 
+      left_join(painful_lookup, by = c("short_feature" ="lookup"))
+      
+    
+  write_rds(system_importance_table,file.path(results_dir,"system_importance_table.rds"))
 
-    system_varimportance_figure <- system_importance %>%
-      mutate(
-        short_feature = case_when(
-          short_feature == "ret_yr" ~ "Return Year",
-          short_feature == "env_sst" ~ "SST",
-          short_feature == "env_slp" ~ "SLP",
-          TRUE ~ short_feature
-        )
-      ) %>%
-      mutate(short_feature = snakecase::to_title_case(short_feature)) %>%
-      filter(mean_importance > 0.05) %>%
-      ggplot(aes(reorder(short_feature, mean_importance), mean_importance)) +
+    system_varimportance_figure <- system_importance_table %>% 
+      group_by(pred_system) %>% 
+      filter(mean_importance > 0.075) %>%
+      ggplot(aes(reorder(name, mean_importance), mean_importance)) +
       geom_hline(aes(yintercept = 0)) +
       geom_col() +
       facet_wrap( ~ pred_system, scales = "free_y") +
@@ -1594,6 +1764,8 @@ if (file.exists(file.path(results_dir, "parsnip_loo_preds.rds"))) {
 
 # retrospective_bias_plot
 #
+
+
 
 
 # save things -------------------------------------------------------------

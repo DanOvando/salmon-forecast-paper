@@ -26,7 +26,7 @@ do.est <- TRUE
 do.parallel <- TRUE
 
 # Number of cores to use for parallel
-n.cores <- detectCores()-2
+n.cores <- detectCores()-4
 
 model <- "dlm"
 
@@ -88,6 +88,9 @@ if(do.est==TRUE) {
     # Wrapper function 
     wrapper <- function(x) {
       return_year <- years[x]
+      
+      print(return_year)
+      
       fit <- fit_dlm_model(pred.year=return_year, start.year=start.year, 
                              model.type=model.type, data=dat, rivers.include=stocks, maxit=maxit)
       # Outputs

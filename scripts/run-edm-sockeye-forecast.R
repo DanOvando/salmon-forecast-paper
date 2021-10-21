@@ -1,312 +1,198 @@
-#------------------------------------------------------------------------------
-#Clean script to run EDM analyses
+#------------------------------------------------------------------------------------
+#Double Check Salmon rEDM
+#------------------------------------------------------------------------------------
+# options(max.print = 1000, device = 'windows')
 
-#------------------------------------------------------------------------------
-#Load packages
 # library(plyr)
+# # library(rerddap)
+# library(reshape2)
 # library(tidyverse)
 # library(doParallel)
-# library(reshape2)
-# library(here)
-# library(rEDM)
-# library(tsensembler)
 # library(lubridate)
-# library(geosphere)
-# library(DescTools)
+# library(patchwork)
+# library(maps)
+# library(ggmap)
+# # library(ggsidekick)
+# library(devtools)
+# library(patchwork)
+# devtools::install_github("SugiharaLab/rEDM")
+# library(rEDM)
+# states_map <- map_data("state")
+# world_map <- map_data("world")
 
-# setwd("C:/Users/peter.kuriyama/SynologyDrive/research/postdoc/salmon-forecast-paper")
-# source("functions/edm_helper_functions.R")
 
-#------------------------------------------------------------------------------
-#Function to change my here directory (I don't use rstudio so Rprojects
-#not feasible)
-# change_here <- function(new_path){
-#   new_root <- here:::.root_env
-#   
-#   new_root$f <- function(...){file.path(new_path, ...)}
-#   
-#   assignInNamespace(".root_env", new_root, ns = "here")
-# }
-# set_here("C:/Users/peter.kuriyama/SynologyDrive/research/postdoc/salmon-forecast-paper")
+# setwd("C://Users//peter.kuriyama//SynologyDrive//Research//noaa//salmon-forecast-paper")
 
-# functions <- list.files(here::here("functions"))
+ldply <- plyr::ldply
+ae <- function (y, y_hat) 
+{
+  stopifnot(length(y) == length(y_hat), is.numeric(y), is.numeric(y_hat))
+  abs(y - y_hat)
+}
 
-# purrr::walk(functions, ~ source(here::here("functions", .x)))
+my_mase <- function (y, y_hat, y_prev) 
+{
+  # print("make sure NAs filtered out of input")
+  #Calculate the ae using the previous time steps
+  den <- sum(ae(y, y_prev), na.rm = T)
+  out <- sum(ae(y, y_hat)) / den
+  return(out)
+}
+#------------------------------------------------------------------------------------
+#Age class data
+#------------------------------------------------------------------------------------
+agedat <- read.csv(here("data",paste0(return_table_year,".csv")), stringsAsFactors = FALSE)
+agedat$age_class <- paste(agedat$fwAge, agedat$oAge)
+# agedat %>% group_by(age_class) %>% summarize(avg_ret = mean(ret)) %>% arrange(desc(avg_ret))
 
-# prep_run(results_name = "v0.5", results_description = "testing")
+#Only try to predict the 2 2, 1 3, 1 2, 2 3 age classes
+agedat$unq <- paste(agedat$System, agedat$age_class)
+agedat$unq <- gsub(" ", "_", agedat$unq)
+agedat$ret_std <- (agedat$ret - mean(agedat$ret)) / sd(agedat$ret)
+focus_ages <- c("2 2", "1 3", "1 2", "2 3")
+agedat_all <- agedat
+agedat <- agedat_all %>% filter(age_class %in% focus_ages)
+agedat$year <- agedat$retYr
 
-# set options -------------------------------------------------------------
+unqs <- agedat %>% distinct(System, unq)
 
-ncores <- 2
-# run <- "v0.1"
-# description <- "testing"
+#------------------------------------------------------------------------------------
+#Multiview function
+#
+# maxE <- 5
+# year_range <- 2000:2001
+# unq_inds = 1:6
+# nmultiview = 5
 
-# rundir <- here::here("edm", "results", run)
 
-rundir <- results_dir
+multiview_years <- function(maxE = 5, year_range = first_year:(last_year - 1), unq_inds = 1:6,
+                            nmultiview = 5){
+  
+  out <- vector('list', length = length(year_range))
+  for(ii in 1:length(year_range)){
+    start_time <- Sys.time()
+    one_run <- lapply(unq_inds, FUN = function(xx){
+      #Process the values and dcast
+      temp_sys <- unqs[xx, ]
+      temp <- agedat %>% filter(System == temp_sys$System)
+      temp1 <- temp %>% select(year, unq, ret_std) %>% dcast(year ~ unq, 
+                                                             value.var = 'ret_std')
+      
+      #Filter out NAs
+      if(sum(is.na(rowSums(temp1[, 2:5]))) > 0){
+        temp1 <- temp1[-which(is.na(rowSums(temp1 %>% select(-year)))), ]  
+      }
+      
+    
+      cols <- paste0(names(temp1)[-1], collapse = " ")
+      libs <- range(which(temp1$year < year_range[ii]))
+      libs <- paste0(libs, collapse = " ")
+      preds <- range(which(temp1$year > year_range[ii]))
+      preds[1] <- preds[1] - maxE
+      preds <- paste0(preds, collapse = " ")
+      
+      res <- Multiview(dataFrame = temp1, lib = libs, pred = preds, trainLib = T,
+                       multiview = nmultiview, target = temp_sys$unq, E = maxE,
+                       columns = cols)  
+      
+      #Process the results
+      res$View$pred_unq <- temp_sys$unq
+      res$View$pred_system <- temp_sys$System
+      res$View$pred_year <- year_range[ii]
+      res$Predictions$pred_unq <- temp_sys$unq
+      res$Predictions$pred_system <- temp_sys$System
+      res$Predictions$pred_year <- year_range[ii]
+      res$Predictions$obs1 <- c(NA, res$Predictions$Observations[-nrow(res$Predictions)])
+    
+      return(res)  
+    })
+    out_view <- lapply(one_run, FUN = function(zz) zz[[1]])
+    out_view <- ldply(out_view)
+    
+    out_preds <- lapply(one_run, FUN = function(zz) zz[[2]])
+    out_preds <- ldply(out_preds)
+  
+    out1 <- list(View = out_view, preds = out_preds)
+    run_time <- Sys.time() - start_time
+    print(run_time)
+    out[[ii]] <- out1
+  }
+  
+  views <- lapply(out, FUN = function(ll) ll[[1]])
+  views <- ldply(views)
+  
+  preds <- lapply(out, FUN = function(ll) ll[[2]])
+  preds <- ldply(preds)
+  
+  all_res <- list(views = views, preds = preds)
+  return(all_res)
+}
 
-# if (!dir.exists(rundir)) {
-  # dir.create(rundir, recursive = TRUE)
-  # dir.create(file.path(rundir, "edm_figs"), recursive = TRUE)
-  # dir.create(file.path(rundir, "edm_fits"), recursive = TRUE)
-  # write(description, file = file.path(rundir, "description.txt"))
-# }
+#------------------------------------------------------------------------------------
+#Try all values with dimension 2
+time1 <- Sys.time()
+all2 <- multiview_years(year_range = first_year:(last_year - 1), 
+                      unq_inds=c(1:32), maxE = 2, nmultiview = 1)
+time2 <- Sys.time() - time1; time2
 
-# last_year <- 2019 # the final year in the data
-age_groups <- 4 #number of top age groups to include
-# min_year <- 1963 # only include data greater than or equal this year
-# first_year <- 2000 # the first year splitting the test and training data
-# max_year <- 2015
 
-#------------------------------------------------------------------------------
-#Load and process Data
-dat <- read.csv(here::here("data", paste0(return_table_year,".csv")), stringsAsFactors = FALSE) 
-# dat <- read.csv("data/2019.csv", stringsAsFactors = F)
 
-#add ages
-dat$Age <- paste(dat$fwAge, dat$oAge, sep = "_")
-dat$unq <- paste(dat$System, dat$Age, sep = "_")
-dat$ret_std <-  dat$ret #standardize(dat$ret)
+time1 <- Sys.time()
+all21 <- multiview_years(year_range = first_year:(last_year - 1), 
+                        unq_inds=c(33:36), maxE = 2, nmultiview = 1)
+time2 <- Sys.time() - time1; time2
 
-#Filter dat by min_year specification
-dat <- dat %>% filter(retYr >= min_year)
 
-#Sum returns by retYr and system
-tot_dat <- dat %>% group_by(retYr, System) %>% 
-	summarize(ret = sum(ret)) %>% as.data.frame
+all2$views <- rbind(all2$views, all21$views)
+all2$preds <- rbind(all2$preds, all21$preds)
 
-#Remove system/ages with all zeroes
-dat <- dat %>% group_by(unq) %>% mutate(nvals = length(ret), 
-  nzeroes = length(which(ret == 0)), prop_zero = nzeroes / nvals) %>%
+#age class predictions with E of 2
+save(all2, file = "all2.Rdata")
+
+
+res2 <- all2$preds %>% filter(year == pred_year)
+
+res2 %>% group_by(pred_unq) %>%
+  summarize(rho = cor.test(Observations, Predictions)$estimate,
+            pval = cor.test(Observations, Predictions)$p.value,
+            nnkmase = my_mase(Observations, Predictions, obs1)) %>%
   as.data.frame
-dat <- dat %>% filter(prop_zero != 1)
 
-#Standardize the total returns
-# tot_dat$ret_std <- standardize(tot_dat$ret)
-tot_dat$ret_std <- (tot_dat$ret)
-
-tot_ret <- tot_dat %>% dcast(retYr ~ System, value.var = 'ret_std')
+#Back transform the predictions
+res2$predictions <- res2$Predictions * sd(agedat_all$ret) + mean(agedat_all$ret)
+res2$observations <- res2$Observations * sd(agedat_all$ret) + mean(agedat_all$ret)
 
 
-#------------------------------------------------
-# 1. Run EDM block_lnlp with simplex and smap for 
-# each river by itself
-#------------------------------------------------
-#Run for each system
-rivs <- unique(dat$System)
-rivs_res <- vector('list', length = length(rivs))
-
-start_time <- Sys.time()
-for(zz in 1:length(rivs)){
-	lib_cols <- dat %>% filter(System == rivs[zz]) %>%
-		distinct(unq) %>% pull(unq)
-	preds <- dat %>% filter(System == rivs[zz]) %>% group_by(unq) %>%
-	  summarize(avg_ret = mean(ret)) %>% arrange(desc(avg_ret)) %>%
-	  slice(1:5) %>% pull(unq)
-	one_riv <- multiple_pred_group(in_group = lib_cols, in_col = preds)
-	one_riv$type <- "one system all ages"
-	rivs_res[[zz]] <- one_riv
-}
-rivs_res <- plyr::ldply(rivs_res) 
-run_time <- Sys.time() - start_time; run_time #Runs in about 1.2 minutes
-#ignore warnings
-
-wtf <- rivs_res %>% 
-  unnest(cols = model_output)
-
-rivs_res %>% filter(mase5 < 1, rho5 > 0, p_val5 <= 0.05) %>% dim
-
-#------------------------------------------------
-# 2. Run single age from all systems
-#------------------------------------------------
-#Single age from all systems
-focus_ages <- c("1_2", "2_2", "1_3", "1_4", "2_3")
-age_res <- vector('list', length = length(focus_ages))
-
-start_time <- Sys.time()
-for(zz in 1:length(focus_ages)){
-	lib_cols <- unique(dat$unq)[grep(focus_ages[zz], unique(dat$unq))]
-	one_riv <- multiple_pred_group(in_group = lib_cols, in_col = lib_cols)
-	one_riv$type <- "one age all systems"
-	age_res[[zz]] <- one_riv
-}
-age_res <- plyr::ldply(age_res) 
-run_time <- Sys.time() - start_time; run_time  #Runs in 1.2 minutes
-age_res %>% filter(mase5 < 1, rho5 > 0, p_val5 <= 0.05) %>% dim
-
-#------------------------------------------------
-# 3. Specifically westside and eastside returns
-#------------------------------------------------
-#Look at west and east side returns
-
-wests <- c("Nushagak", "Igushik", "Wood", "Togiak")
-focus_ages <- c("1_2", "2_2", "1_3", "1_4", "2_3")
-ww <- crossing(System = wests, Age = focus_ages)
-ww$unq <- paste(ww$System, ww$Age, sep = "_")
-
-west_res <- vector('list', length = nrow(ww))
-lib_cols <- dat %>% filter(unq %in% ww$unq) %>%
-		distinct(unq) %>% pull(unq)
-	
-west_res <- multiple_pred_group(in_group = lib_cols, in_col = lib_cols)
-west_res$type <- "westside, focus ages"
-
-west_res %>% filter(mase5 < 1, rho5 > 0, p_val5 <= 0.05) 
-
-#---------------------------
-#East results
-easts <- c("Ugashik", "Egegik", "Kvichak", "Naknek", "Alagnak")
-focus_ages <- c("1_2", "2_2", "1_3", "1_4", "2_3")
-ww <- crossing(System = easts, Age = focus_ages)
-ww$unq <- paste(ww$System, ww$Age, sep = "_")
-
-easts_res <- vector('list', length = nrow(ww))
-lib_cols <- dat %>% filter(unq %in% ww$unq) %>%
-		distinct(unq) %>% pull(unq)
-	
-easts_res <- multiple_pred_group(in_group = lib_cols, in_col = lib_cols)
-easts_res$type <- "eastside, focus ages"
-easts_res %>% filter(mase5 < 1, rho5 > 0, p_val5 <= 0.05) %>% dim
-
-#------------------------------------------------
-# 4. One system, focus on top 4 ages (by average returns)
-#Specified in arguments at top of script
-#------------------------------------------------
-#one system focus ages
-rivs <- unique(dat$System)
-rivs_res_focusages <- vector('list', length = length(rivs))
-
-start_time <- Sys.time()
-
-for(zz in 1:length(rivs)){
-	preds <- dat %>% filter(System == rivs[zz]) %>% group_by(unq) %>%
-	  summarize(avg_ret = mean(ret)) %>% arrange(desc(avg_ret)) %>%
-	  slice(1:age_groups) %>% pull(unq)
-	one_riv <- multiple_pred_group(in_group = preds, in_col = preds)
-	one_riv$type <- "one system top6 ages"
-	rivs_res_focusages[[zz]] <- one_riv
-}
-rivs_res_focusages <- plyr::ldply(rivs_res_focusages) 
-run_time <- Sys.time() - start_time; run_time
-#------------------------------------------------
-# 5. Combine and save all the results
-#------------------------------------------------
-all_res <- rbind(west_res, easts_res, rivs_res,
-	age_res, rivs_res_focusages)
-  
-  all_res$pred_type <- 'smap'
-all_res[all_res$theta == 999, 'pred_type'] <- 'simplex'
-
-temp <- all_res %>% 
-  filter(type == "one system top6 ages") %>% 
-  unnest(cols = model_output) %>% 
-  filter(time == predyr) %>% 
-  mutate(obs = pmax(0,obs),
-         pred = pmax(0,pred)) %>% 
-  separate(pred_col, into = c("system", "fwa","oa"), sep = '_', convert = TRUE) %>% 
-  mutate(age = fwa + oa + 1,
-         age_group = paste(fwa,oa, sep = '_')) %>% 
-  mutate(brood_year = time - age,
-         model = paste(pred_type,type, sep = '_')) %>% 
-  rename(
-         observed_returns = obs,
-         predicted_returns = pred,
-         return_year = time) %>% 
-select(model, brood_year, return_year, system, age_group, observed_returns, predicted_returns)
-
-readr::write_csv(temp, path = file.path(results_dir,"edm_loo_results.csv"))
+ff <- res2 %>% select(year, pred_unq, predictions)
+names(ff)[2] <- 'unq'
 
 
-# temp %>%
-#   group_by(model, return_year) %>% 
-#   summarise(observed = sum(observed_returns),
-#             predicted = sum(predicted_returns)) %>% 
-#   ggplot(aes(observed, predicted)) +
-#   geom_point() + 
-#   facet_wrap(~model)
+finalres <- agedat %>% left_join(ff, by = c("year", 'unq'))
+finalres <- finalres %>% filter(!is.na(predictions))
+finalres <- finalres %>% select(broodYr, retYr, System, age_class, ret, predictions)
+finalres$model <- 'multiview'
 
-# temp %>%
-#   filter(model == "smap_one system top6 ages") %>% 
-#   group_by(model, return_year) %>%
-#   summarise(observed = sum(observed_returns),
-#             predicted = sum(predicted_returns)) %>%
-#   ggplot() +
-#   geom_col(aes(return_year, observed)) +
-#   geom_point(aes(return_year, predicted)) +
-#   facet_wrap(~ model)
 
-save(all_res, file = file.path(rundir, "all_edm_res.Rdata"))
 
-#------------------------------------------------
-#Load raw results and create summary values
-load(file = file.path(rundir, "all_edm_res.Rdata"))
+edm_model <- finalres %>%
+  rename(brood_year = broodYr,
+         return_year = retYr,
+         observed_returns = ret,
+         Forecast = predictions) %>% 
+  mutate(age_group = str_replace_all(age_class," ","_")) %>% 
+  select(model,
+         brood_year,
+         return_year,
+         System,
+         age_group,
+         observed_returns,
+         Forecast) %>%
+  mutate(Forecast = Forecast) %>%
+  rename("system" = "System", "predicted_returns" =
+           "Forecast")
 
-#Add river name
-rivs <- strsplit(all_res$pred_col, split = "_")
-rivs <- plyr::ldply(rivs)
-all_res$riv <- rivs$V1
-#five years in future
-npreds <- 5
+# edm_model %>% 
+#   ggplot(aes(observed_returns, predicted_returns)) + 
+#   geom_point()
 
-to_loop <- all_res %>% distinct(theta, type, riv, predyr) 
-
-total_summary <- lapply(1:nrow(to_loop), FUN = function(dd){
-# total_summary <- lapply(1:50, FUN = function(dd){
-	temp_row <- to_loop[dd, ]
-	temp <- all_res %>% filter(theta == temp_row$theta, type == temp_row$type,
-		riv == temp_row$riv, predyr == temp_row$predyr)
-	temp1 <- plyr::ldply(temp$model_output) %>% group_by(time) %>% summarize(obs = sum(obs),
-		pred = sum(pred)) %>% as.data.frame
-	temp1 <- temp1 %>% filter(time >= temp_row$predyr, 
-		time < (temp_row$predyr + npreds))
-	summarize_predictions(temp1)
-})
-total_summary <- plyr::ldply(total_summary)
-
-all_res_summ <- cbind(to_loop, total_summary)
-
-all_res_summ %>% filter(rho > 0, mase < 1) %>% 
-	group_by(riv, theta, type) %>% summarize(nyears = length(predyr)) %>%
-	as.data.frame %>% arrange(desc(nyears))  %>% head
-
-#------------------------------------------------
-# 6. Plot results
-#------------------------------------------------
-#look at predictions for each of the rivers and one system, top6 ages
-# all_res$pred_type <- 'smap'
-# all_res[all_res$theta == 999, 'pred_type'] <- 'simplex'
-
-to_loop <- all_res %>% distinct(type, riv, predyr, pred_type)
-
-each_pred <- lapply(1:nrow(to_loop), FUN = function(ss){
-	temp_loop <- to_loop[ss, ]
-	temp <- all_res %>% filter(type == temp_loop$type, riv == temp_loop$riv, 
-		predyr == temp_loop$predyr, pred_type == temp_loop$pred_type)
-	tt1 <- plyr::ldply(temp$model_output) %>% group_by(time) %>% summarize(obs = sum(obs),
-		pred = sum(pred)) %>% as.data.frame
-	tt1$type <- temp_loop$type
-	tt1$riv <- temp_loop$riv
-	tt1$predyr <- temp_loop$predyr
-	tt1$pred_type <- temp_loop$pred_type
-	return(tt1)
-})
-each_pred <- plyr::ldply(each_pred)
-
-write_csv(each_pred,file.path(results_dir, "raw_edm_results.csv"))
-
-temp_comp <- each_pred %>% filter(type %in% c("one system top6 ages"), 
-	predyr == 2000)
-
-edm_results <- each_pred %>% 
-  filter(type %in% c("one system top6 ages"),
-         time == predyr)
-                     
-  
-
-# 
-# ggplot(temp_comp, aes(x = time)) + geom_point(aes(y = obs)) +
-# 	geom_line(aes(y = pred, group = pred_type, col = pred_type)) + 
-# 	facet_wrap(~ riv, scales = 'free_y') 
-
-# ggplot(tt1, aes(x = time)) + geom_point(aes(y = obs)) + geom_line(aes(y = pred))
-
+readr::write_csv(edm_model, path = file.path(results_dir,'edm_loo_results.csv'))
