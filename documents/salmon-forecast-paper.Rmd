@@ -1,21 +1,13 @@
 ---
-title: Evaluating the potential of modern computational tools in salmon forecasting
-author:
-  - Daniel Ovando*
-  - Curry Cunningham
-  - Peter Kuriyama
-  - Chris Boatright
-  - Ray Hilborn
-date: "`r Sys.Date()`"
 output: 
-  bookdown::word_document2:
-    reference_docx: template.docx
   bookdown::pdf_document2:
     keep_tex: true
+  bookdown::word_document2:
+    reference_docx: template.docx
 bibliography: "../references.bib"
 csl: canadian-journal-of-fisheries-and-aquatic-sciences.csl
 params: 
-  results_name: ["v1.0.0.9000"]
+  results_name: ["v1.0.1.9000"]
 linkcolor: blue
 toc: false
 header-includes:
@@ -59,6 +51,8 @@ load(file = file.path(results_dir, "performance.RData"))
 
 load(file = file.path(results_dir, "forecasts.RData"))
 
+ system_importance_table <-  read_rds(file.path(results_dir,"system_importance_table.rds"))
+
 
 ```
 
@@ -76,7 +70,7 @@ age_benchmarks <- age_performance %>%
 
 
 sys_performers <- system_performance %>% 
-  filter(!model %in% c("fri"), !str_detect(model,"ensemble")) %>% 
+  filter(!model %in% c("fri"), !str_detect(model,"ensemble"), !str_detect(model,"lag")) %>% 
   group_by(system) %>% 
   filter(srmse == min(srmse))
 
@@ -272,23 +266,21 @@ age_improv <- age_performance %>%
 
 # Title Page {.unnumbered}
 
-## Running Head  {.unnumbered}
-
-Finding Frontiers in Ecological Forecasting
-
 ## Title   {.unnumbered}
 
-Identifying Frontiers in Ecological Forecasting with Modern Computational Tools
+Improving Forecasts of Sockeye Salmon (*Oncorhynchus nerka*) with Modern Computational Tools. 
 
-## List of Authors {.unnumbered}
+## Author List {.unnumbered}
 
-Daniel Ovando^a^\*, Curry Cunningham^b^,Peter Kuriyama^c^,Christopher Boatright^a^, Ray Hilborn ^a^
+Daniel Ovando^a^\*, Curry Cunningham^b^,Peter Kuriyama^c^,Christopher Boatright^a^, Ray Hilborn ^a,d^
 
-^a^School of Aquatic and Fishery Sciences University of Washington 1122 NE Boat St, Box 355020 Seattle, WA 98195-5020
+^a^ School of Aquatic and Fishery Sciences, University of Washington Box 355030 Seattle WA 98195
 
 ^b^College of Fisheries and Ocean Sciences University of Alaska Fairbanks 17101 Point Lena Loop Road Juneau, AK 99801
 
 ^c^NOAA Fisheries Southwest Fisheries Science Center 8901 La Jolla Shores Dr, La Jolla, CA 92037
+
+^d^Center for Sustaining Seafood, University of Washington Box 355030 Seattle WA 98195
 
 ## Corresponding Author {.unnumbered}
 
@@ -297,9 +289,9 @@ Daniel Ovando^a^\*, Curry Cunningham^b^,Peter Kuriyama^c^,Christopher Boatright^
 
 \newpage
 
-## Abstract (175 words) {.unnumbered}
+## Abstract {.unnumbered}
 
-Accurate pre-season forecasts for the numbers of sockeye salmon (*Oncorhynchus nerka*) that will return to the river systems of Bristol Bay, Alaska, play an important role in management and harvesting decisions for this culturally and ecologically vital species. We used a suite of flexible modern computation tools to assess the frontiers in pre-season forecast accuracy of Bristol Bay sockeye salmon possible given currently-available data. In retrospective performance testing individual models were capable of reducing pre-season forecast error at the river system level by on average `r percent(comp_sys_improvement$imp_on_fri)` relative to a benchmark model used in the system produced by the Fisheries Research Institute (FRI). We then we utilized an ensemble modeling approach to produce pre-season forecasts based on historic performance of individual models. This ensemble model reduced river system level forecast error by `r percent(comp_ens_sys_improvement$improv_amnt)` on average in `r comp_ens_sys_improvement$n_improv` of the `r n_distinct(system_forecast$system)` evaluated river systems, though it increased forecast error by `r percent(-comp_ens_sys_improvement$worse_amnt)` on average in the remaining `r n_distinct(system_forecast$system) - comp_ens_sys_improvement$n_improv` systems. We found potential for modest improvements in forecast accuracy across a variety of scales. However all tested models failed to accurately predict certain periods in the abundance timeseries, indicating that further forecast improvements depend on novel data rather than more flexible models.
+Accurate forecasts of sockeye salmon (*Oncorhynchus nerka*) in Bristol Bay, Alaska, play an important role in management and harvesting decisions for this culturally and ecologically vital species. We used a suite of modern computational tools to assess the frontiers in forecast accuracy of Bristol Bay sockeye salmon possible given currently-available data. In retrospective performance testing individual models were capable of reducing pre-season forecast error at the river system level by on average `r percent(comp_sys_improvement$imp_on_fri)` relative to a benchmark model. We utilized an ensemble modeling approach to produce pre-season forecasts based on historic performance of individual models. This ensemble model reduced river system level forecast error by `r percent(comp_ens_sys_improvement$improv_amnt)` on average in `r comp_ens_sys_improvement$n_improv` of the `r n_distinct(system_forecast$system)` evaluated river systems, though it increased forecast error by `r percent(-comp_ens_sys_improvement$worse_amnt)` on average in the remaining `r n_distinct(system_forecast$system) - comp_ens_sys_improvement$n_improv` systems. We found potential for modest improvements in forecast accuracy across a variety of scales. However all tested models failed to accurately predict certain periods in the abundance timeseries, indicating that further forecast improvements depend on novel data rather than more flexible models.
 
 <!-- Our results demonstrate both the utility and limitations of modern computational tools for applied management of natural resources, even when confronted with the short time series and observation error common in ecological systems. -->
 
@@ -317,7 +309,7 @@ Alaska, Salmon,Machine learning,Empirical Dynamic Modeling, Dynamic Linear Model
 
 # Introduction {.unnumbered}
 
-Animal populations exhibit complex dynamics driven by interactions with many aspects of their ecosystem. Predicting the outcomes of these dynamics is a critical task of natural resource management; Forecasts of future abundance are often used to set fisheries regulations, vessel operators may make decisions about alternative fisheries based on predicted abundance, and industries and communities use forecasts to inform long-term and short-term investment plans in staffing and production capacity. The past two decades have seen explosive progress in the ability of modern "computer age"[@efron2016] tools to improve prediction, revolutionizing fields such as financial modeling, weather forecasting, and medicine. However, these methods remain relatively unused in ecological forecasting, particularly in an applied setting [@peters2014]. We use the ecologically and economically critical sockeye salmon (*Oncorhynchus nerka*) populations of Bristol Bay, Alaska to demonstrate the use of modern computation tools in applied predictive modeling, and show how they can be used to identify frontiers in forecast accuracy given currently available data.
+Animal populations exhibit complex dynamics driven by interactions with many aspects of their ecosystem. Predicting the outcomes of these dynamics is a critical task of natural resource management; Forecasts of future abundance are often used to set fisheries regulations, vessel operators may make decisions about alternative fisheries based on predicted abundance, and industries and communities use forecasts to inform long-term and short-term investment plans in staffing and production capacity. The past two decades have seen explosive progress in the ability of modern "computer age" [@efron2016] tools to improve prediction, revolutionizing fields such as financial modeling, weather forecasting, and medicine. However, these methods remain relatively unused in ecological forecasting, particularly in an applied setting [@peters2014]. We use the ecologically and economically critical sockeye salmon (*Oncorhynchus nerka*) populations of Bristol Bay, Alaska to demonstrate the use of modern computation tools in applied predictive modeling, and show how they can be used to identify frontiers in forecast accuracy given currently available data.
 
 <!-- However, the methods used to make these ecological predictions are often decades old and generally do not go beyond forward projection from age-structured models. -->
 
@@ -337,11 +329,11 @@ Why might we expect modern computational tools to be well-suited to the task of 
 
 Rather than incorporate factors such as environmental drivers directly, salmon forecasting has traditionally relied on cohort or “sibling” regression methods, in which the return abundance of an older age class is predicted by the abundance of younger age classes, returning in prior years but originating from the same river system and brood year. For example, the return abundance of four-year old fish are predicted by the returns of three-year old fish observed in the previous season. There are good reasons for this practice: trends in sibling abundance integrate across many environmental factors affecting salmon survival and returns. If a particular cohort suffers from poor environmental conditions, increased competition with conspecifics,  or a greater abundance of predators, the demographic impacts of these changes will be reflected in the return abundance of younger age classes from the same cohort (i.e. originating from the same brood year) that experienced similar environmental conditions or resource availability, and by extension survival, as juveniles. However, the sibling regression method does have shortcomings, most notably the underlying assumption of consistency in the relationship between the abundance of different age classes and stability in the maturation schedule (i.e. the probability of salmon maturing and returning to freshwater to spawn after a given number of years in the ocean). For example, if environmental conditions cause members of a cohort of salmon to spend more time at sea than in previous years, a sibling regression might under-predict the number of future returns. In addition, sibling regression requires accurate observations of the return abundance for younger sibling age classes, limiting the performance of these models in predicting returns of younger salmon for which few or no siblings (i.e. returning younger age classes) have yet been observed.
 
-We hypothesize that directly incorporating data on candidate potentially time-varying factors influencing and correlated with salmon return size, rather than relying on sibling returns alone, may help improve forecast performance given the intricate dynamics of salmon populations. However, these variables are likely to have complex, non-linear, and non-stationary effects on salmon populations, potentially obscuring their value from conventional parametric statistical approaches, with user-defined parameters, structures, and error distributions. In order to explore this possibility, we used a suite of six methods together with a panel of data on salmon populations and environmental conditions in Bristol Bay, Alaska to explore what if any improvements in forecast skill could be achieved. These models included two machine learning methods, a random forest (rand\_forest), [@breiman2001; @wright2017] and a boosted regression tree, boost\_tree, [@chen2020]), empirical dynamic models (edm) [@sugihara1990; @munch2020; @ye2020], and dynamic linear models (dlm)[ @petris2009; @pole1994]. We also included a lag-1 model, (lag\_1), as a performance benchmark, in which the predicted returns for a given age group and river system in a year are equal to the observed returns for that that age group in that river system in the prior year. Our goal here was not to establish whether one type of model performs inherently better than others, but to evaluate how use of different computer age models and data types can collectively improve forecast ability and identify frontiers in forecast ability given available data. We also evaluated the performance of a model ensemble which weights predictions from individual ensemble members (alternative predictive model types) based on recent performance, and compare this with observed performance from the Fisheries Research Institute (FRI) forecast, a benchmark forecast that utilizes a qualitative ensemble approach based on evaluation of recent performance for alternative models within the ensemble. 
+We hypothesize that directly incorporating data on candidate potentially time-varying factors influencing and correlated with salmon return size, rather than relying on sibling returns alone, may help improve forecast performance given the intricate dynamics of salmon populations. However, these variables are likely to have complex, non-linear, and non-stationary effects on salmon populations, potentially obscuring their value from conventional parametric statistical approaches, with user-defined parameters, structures, and error distributions. In order to explore this possibility, we used a suite of six methods together with a panel of data on salmon populations and environmental conditions in Bristol Bay, Alaska to explore what if any improvements in forecast skill could be achieved. These models included two machine learning methods, a random forest (rand\_forest), [@breiman2001; @wright2017] and a boosted regression tree, boost\_tree, [@chen2020], empirical dynamic models (edm) [@sugihara1990; @munch2020; @ye2020], and dynamic linear models (dlm)[ @petris2009; @pole1994]. We also included a lag-1 model, as a performance benchmark, in which the predicted returns for a given age group and river system in a year are equal to the observed returns for that that age group in that river system in the prior year. Our goal here was not to establish whether one type of model performs inherently better than others, but to evaluate how use of different computer age models and data types can collectively improve forecast ability and identify frontiers in forecast ability given available data. We also evaluated the performance of a model ensemble which weights predictions from individual ensemble members (alternative predictive model types) based on recent performance, and compare this with observed performance from the Fisheries Research Institute (FRI) forecast, a benchmark forecast that utilizes a qualitative ensemble approach based on evaluation of recent performance for alternative models within the ensemble. 
 
 
 
-# Methods {.unnumbered}
+# Materials and methods {.unnumbered}
 
 All code and data needed to fully replicate our results are publicly available at <https://github.com/DanOvando/salmon-forecast-paper/>. We describe critical details of each our main methods here. 
 
@@ -362,11 +354,43 @@ The general structure of our methods are as follows:
 
 We evaluated two different machine learning models: a random forest (rand\_forest, implemented through the `ranger` package [@wright2017] in R [@rcoreteam2020]), and boosted regression trees, boost\_tree, through the `xgboost` package [@chen2020]. A recurrent neural network implemented through `tensorflow` [@allaire2020] through the `keras` interface [@allaire2020a] was also tested but was found to perform poorly relative to the other methods and to be extremely computationally intensive, and as such was not included in the main analysis. Random forests are ensembles of regression trees, which make predictions by selecting nested splits of variables and mapping the mean level of the dependent variable at the terminal nodes of each tree. Boosted regression trees are similar to random forests, but have mechanisms in place that actively update the model to address data points that the model is struggling to fit [@elith2008]. For all machine learning methods, within a model fit the model selects splits/transformations/coefficients to minimize the root mean squared error (RMSE) of predictions for data withheld from the fitting process by the algorithm.
 
-Each of the machine learning methods had access to a variety of population and environmental data. We fit versions of each model separately for each age group in each major river system. Within that river system, the candidate predictor variables included the sibling returns for the cohort in question in all river systems, spawning abundance producing the cohort in question, along with the running mean environmental conditions (sea surface temperature, pacific decadal oscillation, sea surface air pressure, and degree of upwelling) over the years the cohort spent at sea, and the reported numbers of chum and pink salmon throughout the North Pacific reported by @ruggerone2018.
+Each of the machine learning methods had access to a variety of population and environmental data. We fit versions of each model separately for each age group in each major river system. Environmental datasets were queried from the NOAA ERDDAP portal using the rerddap package in R [@chamberlain2019]. Included environmental variables include sea surface temperature, sea level pressure, wind stress, and the Pacific Decadal Oscillation index. For each environmental variable, we use mean or median values within the Bristol Bay region across the months of May to August during the year in which the cohort being forecasted entered the ocean. We also included as candidate covariates natural origin returns of pink (*Oncorhynchus gorbuscha*) and chum (*Oncorhynchus keta*) across a range of North Pacific stocks, pulled from @ruggerone2018 (Table.\@ref(tab:dat)). 
 
 When fitting models at the level of age groups by river system, data were first split into training and testing sets. We then split each of the training sets for performance testing (e.g. all data before the year 2000 if the year 2001 is to be forecasted) into a series of analysis and assessment splits for tuning purposes. Given the timeseries nature of the data, we generated these analysis and assessment splits in a rolling manner: for the first split, we used the first 70% of the training year to fit a model, and the remaining 30% to evaluate the performance of that model, followed by the first 75% and 25%, etc. These analysis and assessment splits were used to tune nuisance parameters common to all machine learning models, for example the minimum node size of fitted trees. We fit each of our assessment splits across a grid of potential parameter values, and selected the set of tuning parameters that minimized the RMSE of the predictions on the assessment splits (see computational environment available at <https://github.com/DanOvando/salmon-forecast-paper/> for detailed steps in this process).
 
 Once the optimal set of tuning parameters for each training set were selected, we then fit the final model using all the training data with those tuned parameters, and used that model to predict the returns in the testing set. All relevant data transformations were prepared only on training / analysis splits (e.g. means and standard deviations for centering and scaling) and then applied to testing / assessment splits.
+
+
+```{r dat, results="asis"}
+
+tmp <-  system_importance_table %>% ungroup() %>% select(name, Description, Source) %>% rename(Name = name) %>% unique() %>% filter(
+    !Name %in% c("Return Year", "Spawner Numbers"),
+    !str_detect(Name, "Past")
+  ) %>% arrange(Name) %>% 
+  filter(!str_detect(Name,":")) %>% 
+  as.data.frame()
+
+salmonind_stuff <- tribble(~Name, ~Description, ~Source,
+                           "Pink and chum abundance","Natural origin returns of pink and chum salmon",
+                           "Ruggerone and Irvine (2018)")
+
+tmp <- tmp %>% 
+  bind_rows(salmonind_stuff)
+
+knitr::kable(tmp,
+             digits = 2,
+             caption = "Environmental and salmonid datasets available to machine learning models.",
+             booktabs = TRUE,
+             format = "latex") %>%
+  kableExtra::kable_styling(full_width = TRUE)
+
+
+```
+
+
+
+
+
 
 ## Dynamic Linear Models {.unnumbered}
 
@@ -391,13 +415,13 @@ We present results from multiview embedding but we also evaluated additional EDM
 
 ## Performance Metrics {.unnumbered}
 
-We do not conduct formal statistical tests of model fit or performance. Parameters of conventional statistical models might be assessed in terms of statistical significance, and models compared via some form of information criterion. However, neither the machine learning or the empirical dynamic modeling methods have formal estimates of uncertainty or likelihoods, and as such do not produce measures of statistical significance around individual forecasts, and cannot be compared using information criteria such as AIC [@akaike1974] scores. Accordingly, we judge model performance by the point estimates of SRMSE produced by each model across the retrospective horizon 1990-2019. SRMSE measures the performance of each model relative to a lag_1 model, a conventional benchmark model for timeseries modeling [@hyndman2006;@ward2014]
+We do not conduct formal statistical tests of model fit or performance. Parameters of conventional statistical models might be assessed in terms of statistical significance, and models compared via some form of information criterion. However, neither the machine learning or the empirical dynamic modeling methods have formal estimates of uncertainty or likelihoods, and as such do not produce measures of statistical significance around individual forecasts, and cannot be compared using information criteria such as AIC [@akaike1974] scores. Accordingly, we judge model performance by the point estimates of SRMSE produced by each model across the retrospective horizon 1990-2019. SRMSE measures the performance of each model relative to a lag-1 model, a conventional benchmark model for timeseries modeling [@hyndman2006;@ward2014]
 
 RMSE is calculated as
 
 $$RMSE_m = \sqrt{\frac{1}{I}\sum\limits_{i = 1}^I(y_{i} - f_{i,m})^2}$$
 
-where *i* represents an observation of numbers of returning salmon *y* and the forecast for those numbers *f* by a given model *m*. In the manner of mean absolute scaled error (MASE, [@hyndman2006]), we scale each models RMSE for a given resolution by the RMSE of a lag_1 model for the same resolution (for example at the river system level).
+where *i* represents an observation of numbers of returning salmon *y* and the forecast for those numbers *f* by a given model *m*. In the manner of mean absolute scaled error (MASE, [@hyndman2006]), we scale each models RMSE for a given resolution by the RMSE of a lag-1 model for the same resolution (for example at the river system level).
 
 $$RMSE_{l1} = \sqrt{\frac{1}{I}\sum\limits_{i = 1}^I(y_{i} - y_{i,l1})^2}$$
 
@@ -405,9 +429,9 @@ and SRMSE for model *m* is then
 
 $$SRMSE_m = \frac{RMSE_m}{RMSE_{l1}}$$
 
-MASE is commonly used to judge the accuracy of predictions derived from time series models, since it compares the error of a given model to the error expected by a simple model in which the predictions in a given time step are equal to the observed values in the last time step (an lag_1 model). We use SRMSE instead of MASE to reflect the use of the forecast. MASE considers an error of ten to be twice as bad as an error of five. In the context of salmon forecasting, our primary objective is to avoid massively over or under estimating the pre-season forecast. SRMSE penalizes large errors more than small errors, helping select models that avoid the kinds of large errors that are most problematic for the task of managing salmon populations.
+MASE is commonly used to judge the accuracy of predictions derived from time series models, since it compares the error of a given model to the error expected by a simple model in which the predictions in a given time step are equal to the observed values in the last time step (a lag-1 model). We use SRMSE instead of MASE to reflect the use of the forecast. MASE considers an error of ten to be twice as bad as an error of five. In the context of salmon forecasting, our primary objective is to avoid massively over or under estimating the pre-season forecast. SRMSE penalizes large errors more than small errors, helping select models that avoid the kinds of large errors that are most problematic for the task of managing salmon populations.
 
-A SRMSE of one means that a model has predictive performance equal to that of the lag\_1 model. A SRMSE greater than one indicates that a given model performs worse than the lag\_1 benchmark, a SRMSE less than one that a model performs better than the lag\_1 benchmark [@hyndman2006]. 
+A SRMSE of one means that a model has predictive performance equal to that of the lag-1 model. A SRMSE greater than one indicates that a given model performs worse than the lag-1 benchmark, a SRMSE less than one that a model performs better than the lag-1 benchmark [@hyndman2006]. 
 
 <!-- Forecasts for a given year are produced by a model trained on data from all preceding years. This type of sliding-window cross-validation permitted the most realistic evaluation of retrospective model performance. -->
 
@@ -446,7 +470,7 @@ The FRI ensemble forecast values were pulled from the historic pre-season foreca
 
 Management of Bristol Bay sockeye salmon operates at the river system level, with inseason fishery managers regulating allowable fishing effort on a daily basis to meet annual escapement goals for each river [@cunningham2019;@fried1988]. For each river system, we selected the individual model with the lowest SRMSE over the years 2000 to 2019 as the model of choice for that river system. On average the best-performing method reduced the SRMSE in pre-season run forecasts at the river system level by `r percent(comp_sys_improvement$imp_on_fri)`, with a minimum improvement of `r percent(comp_sys_improvement$min_imp_on_fri)` and a maximum of `r percent(comp_sys_improvement$max_imp_on_fri)`, relative to the performance of the historic published pre-season FRI forecasts. 
 
-River systems varied in both the lowest SRMSE achieved and in the model that produced the best performance. At least one model was able to out-perform or equal a simple lag_1 benchmark model in each of the river systems, with the `r  sys_performers$model[sys_performers$srmse == min(sys_performers$srmse)]` model achieving a SRMSE of `r prettyNum(min(sys_performers$srmse), digits = 2)` at the top end in the `r sys_performers$system[sys_performers$srmse == min(sys_performers$srmse)]` river system, and the `r sys_performers$model[sys_performers$srmse == max(sys_performers$srmse)]` model providing only marginal improvement over a lag_1 model with a SRMSE of `r prettyNum(max(sys_performers$srmse), digits = 2)` in the `r sys_performers$system[sys_performers$srmse == max(sys_performers$srmse)]` river system. Of all the candidate models explored, only the dlm, boost\_tree, and rand\_forest models were selected as the best performing candidate in at least one river system (Fig.\@ref(fig:sys-forecast)).
+River systems varied in both the lowest SRMSE achieved and in the model that produced the best performance. At least one model was able to out-perform or equal a simple lag-1 benchmark model in each of the river systems except for the Nushagak, with the `r  sys_performers$model[sys_performers$srmse == min(sys_performers$srmse)]` model achieving a SRMSE of `r prettyNum(min(sys_performers$srmse), digits = 2)` at the top end in the `r sys_performers$system[sys_performers$srmse == min(sys_performers$srmse)]` river system, and the `r sys_performers$model[sys_performers$srmse == max(sys_performers$srmse)]` model providing only marginal improvement over a lag-1 model with a SRMSE of `r prettyNum(max(sys_performers$srmse), digits = 2)` in the `r sys_performers$system[sys_performers$srmse == max(sys_performers$srmse)]` river system. The dlm, boost\_tree, and rand\_forest models were selected as the best performing candidate in at least one river system (Fig.\@ref(fig:sys-forecast)).
 
 ```{r sys-forecast, fig.cap="Observed (grey ribbons) and predicted (points) numbers of returning sockeye salmon to primary sockeye-producing river systems in Bristol Bay, Alaska. The color of the points corresponds to the best performing model in terms of scaled root mean squared error (SRMSE), point transparency reflects the SRMSE of the best performing model, noted in the top left corner of each panel."}
 system_forecast_figure
@@ -455,7 +479,7 @@ system_forecast_figure
 
 ### Age Group Forecasts {.unnumbered}
 
-While total river system returns are the primary metric of interest to the Bristol Bay sockeye fishery, the age composition of the returns are also important given their influence of the average size and therefore price for each salmon harvested, and options for processed product forms.  As such we also examined the ability of our tested models to generate predictions at the age group level. In retrospect different models performed best for each of the four age groups considered, and at least one model was able to improve substantially on a lag-1 model in all age groups. One result of note is that the machine learning models evaluated were able to capture the increasing trend (Fig.\@ref(fig:returns)) of returns of fish in the 1.2 and 1.3 age groups. In contrast none of the evaluated models were able to capture the extreme variability in the returns of 2.2 and 2.3 fish particularly well, though they improved on a lag_1 model substantially (Fig.\@ref(fig:age-forecast)). 
+While total river system returns are the primary metric of interest to the Bristol Bay sockeye fishery, the age composition of the returns are also important given their influence of the average size and therefore price for each salmon harvested, and options for processed product forms.  As such we also examined the ability of our tested models to generate predictions at the age group level. In retrospect different models performed best for each of the four age groups considered, and at least one model was able to improve substantially on a lag-1 model in all age groups (Fig.\@ref(fig:age-forecast)). 
 
 ```{r age-forecast, fig.cap="Observed (grey ribbons) and predicted (points) numbers of sockeye salmon within each age group returning to Bristol Bay, Alaska. Age group refers to 'years spent in freshwater'_'years spent in ocean'. Color corresponds to the best performing model in terms of scaled root mean squared error (SRMSE), transparency reflects the SRMSE of the best performing model, noted in the top left corner of each panel."}
 age_forecast_figure
@@ -487,9 +511,9 @@ The underlying assumption of such an ensemble strategy is that the information n
 yearly_system_resid_struggles_figure
 ```
 
-Our residual analysis suggests that in some instances we simply may need to collect different data for inclusion in the forecast model if we hope to improve forecasts. For example, none of our models were able to predict the massive spike in returns of the 1.2 age class to the Wood river system in recent years (Fig.\@ref(fig:resids)), indicating that the process resulting in an increase in salmon survival was not among the suite of predictors explored. We can use the results of our most recent estimated boost\_tree model to examine the relative importance of different included data streams in improving forecast skill (Fig.\@ref(fig:imp-plot)). While these importance scores cannot be interpreted in the same manner as regression coefficients, they give us a sense of where we might look for new data to inform prediction. Across all river systems, prior returns in that system were an important predictor (and in many systems past returns in other river systems were also a useful predictor).
+Our residual analysis suggests that in some instances we simply may need to collect different data for inclusion in the forecast model if we hope to improve forecasts. For example, none of our models were able to predict the massive spike in returns of the 1.2 age class to the Wood river system in recent years (Fig.\@ref(fig:resids)), indicating that a signal of the process resulting in an increase in salmon survival was not among the suite of predictors explored. We can use the results of our most recent estimated boost\_tree model to examine the relative importance of different included data streams in improving forecast skill (Fig.\@ref(fig:imp-plot)). While these importance scores cannot be interpreted in the same manner as regression coefficients, they give us a sense of where we might look for new data to inform prediction. Across all river systems, prior returns in that system were an important predictor (and in many systems past returns in other river systems were also a useful predictor).
 
-```{r imp-plot, eval = TRUE, fig.cap="Mean variable importance across all river systems of variables with importance scores greater than 0.05."}
+```{r imp-plot, eval = TRUE, fig.cap="Mean variable importance across all river systems of variables with importance scores greater than 0.075."}
 system_varimportance_figure
 ```
 
@@ -512,9 +536,9 @@ system_varimportance_figure
 While our tested methods made meaningful improvements in forecast accuracy in many cases, no one model type stood out as a clear winner, highlighting the need for multi-model inference in ecological forecasting.
 
 
-Viewed in retrospect individual models tested here were able to make substantial improvements in forecast accuracy (Fig.\@ref(fig:sys-forecast)-\@ref(fig:age-forecast)). However, the best retrospective model over the years 2000-2019 varied widely by age group and system, presenting a challenge for decision makers charged with picking which model to use for a particular forecast. Ensemble models such as the random forest ensemble (i.e. "model-of-models") constructed here can help users separate out the signal from the noise in historic model performance, which in this case resulted in modest improvements in forecast still in the majority of river systems evaluated in this study. 
+Viewed in retrospect individual models tested here were able to make substantial improvements in forecast accuracy (Fig.\@ref(fig:sys-forecast)-\@ref(fig:age-forecast)). However, the best retrospective model over the years 2000-2019 varied widely by age group and system, presenting a challenge for decision makers charged with picking which model to use for a particular forecast. Ensemble models such as the random forest ensemble (i.e. a "model-of-models") constructed here can help users separate out the signal from the noise in historic model performance, which in this case resulted in modest improvements in forecast still in the majority of river systems evaluated in this study. 
 
-<!-- The clearest outcome from our results at the river system level is that retrospectively no one model performed better than all others, and river systems varied greatly in their predictability. Why is it that some models outperform others at the river system level? One explanation is that simply, given a set of roughly equally effective models and a short period of cross-validation (n = 19 years), we would expect different models to perform best in different river systems by chance alone in some cases. The mean difference in SRMSE between the best and second-best models by river system was only `r prettyNum(mean_srmse_delta$mmd, digits = 1)`, demonstrating that several models are capable of outperforming a lag\_1 model with roughly equal skill in many cases. -->
+<!-- The clearest outcome from our results at the river system level is that retrospectively no one model performed better than all others, and river systems varied greatly in their predictability. Why is it that some models outperform others at the river system level? One explanation is that simply, given a set of roughly equally effective models and a short period of cross-validation (n = 19 years), we would expect different models to perform best in different river systems by chance alone in some cases. The mean difference in SRMSE between the best and second-best models by river system was only `r prettyNum(mean_srmse_delta$mmd, digits = 1)`, demonstrating that several models are capable of outperforming a lag-1 model with roughly equal skill in many cases. -->
 
 <!-- Another explanation could relate to the age group makeup of runs in different river systems. While it is not intuitive as to why one model would perform better than another in a given river system all else being equal, we might expect different models to perform better for different age classes. The dynamic linear model is at its core still a sibling regression, and as such we would expect it to perform better on older age groups for which there is more reliable information on survival from returns of younger age classes. Conversely, while the machine learning and EDM models can use sibling returns, they are more flexible in determining which data are most useful for prediction. As such, predictions for younger age classes can be based more on environmental signals if called for by the data. The boosted regression tree model, which allows for environmental and interspecies effects on salmon returns, performed best for the youngest included age group (1.2 fish) (Fig.\@ref(fig:age-forecast)). Turning back to the river systems, returns to Naknek, where boost\_tree performed best, have recently had large proportions of their runs made up of 1.2 fish (the group for which boost\_tree performed best) (Fig.\@ref(fig:age-returns)). However, the Wood river system has also seen a massive increase in 1.2 fish, and no model was able to correctly capture the recent returns to that river system. -->
 
@@ -523,7 +547,7 @@ Using multiple types of highly flexible modern computational tools can provide i
 
 <!-- annual return of sockeye salmon to the river systems of Bristol Bay Alaska is an economic and ecological marvel, providing critical nutrients and value to Alaska's ecosystems, economy, and people. Efficient and sustainable use of this critical natural and cultural resource depends in part on the ability to accurately forecast the number of salmon that will return each year, prior to the fishing season. As such, accurate and precise forecasts for future salmon abundance are vitally important to the biological and economic sustainability of this important fishery. Allowing environmental and cross-stock correlations to dynamically inform the predictions of sockeye salmon through modern predictive models produced meaningful improvements in our ability to forecast annual returns of these iconic fish. -->
 
-That forecasts for individual river systems can be improved by treating historic returns in other river systems as predictors, as evidenced by the machine learning models is an important finding given that the historically used parametric salmon forecast methods that have largely focused on relationships among age classes within single river systems in isolation. While perhaps not surprising given the juvenile salmon from multiple river systems enter the same area of the eastern Bering Sea during approximately the same season and likely experience similar survival conditions at ocean entry, this result suggests that sharing age-specific return abundance information among salmon stocks and river systems within Bristol Bay can inform and improve predictive performance.
+That forecasts for individual river systems can be improved by treating historic returns in other river systems as predictors, as evidenced by the machine learning models is an important finding. The historically used parametric salmon forecast methods have largely focused on relationships among age classes within single river systems in isolation. While perhaps not surprising given the juvenile salmon from multiple river systems enter the same area of the eastern Bering Sea during approximately the same season and likely experience similar survival conditions at ocean entry, this result suggests that sharing age-specific return abundance information among salmon stocks and river systems within Bristol Bay can inform and improve predictive performance.
 
 In addition to the return abundance of salmon from the home and neighboring river systems, we found that oceanographic variables including mean sea surface temperature and sea surface air pressure throughout the spatial and temporal range of the oceanic phase of these salmon were informative predictors for some river systems. In addition, as reported by @connors2020, in some instances the abundance of other salmon species (chum salmon, *Oncorhynchus keta*, in western Kamchatka and northern British Columbia, pink salmon, *Oncorhynchus gorbuscha*, in Prince William sound) proved important predictors of Bristol Bay salmon return abundance (Fig.\@ref(fig:imp-plot)). Improved data on at-sea conditions and interspecies competitors may facilitate improved forecasts in the future.
 
@@ -531,15 +555,19 @@ Traditional preseason forecast methods for sockeye salmon returning to Bristol B
 
 Forecast methods historically employed by the Fisheries Research Institute involved evaluation of a suite of alternative forecast models in each year, and selection of a preferred model and data time series on which to train the model (i.e. 1963 onward or after the observed shift in the Pacific Decadal Oscillation in 1980), for each salmon stock by age class combination based on forecast bias and precision over the recent 20-year period. While the FRI forecast has always been primarily based on the relationship between the abundance of age classes from the same cohort among successive years, the suite of forecast models explored as part of the FRI forecast has evolved over time. In recent years new methods have been added to the forecast model suite including autoregressive integrated moving average (ARIMA) models, boosted regression trees, Bayesian indicator variable methods, and dynamic linear models. The manual model selection process at the heart of the FRI ensemble approach has proven effective over time at identifying candidate models for forecast groups (stock-by-age) that best leverage patterns within individual time series (i.e. ARIMA, DLM), weighting candidate predictor age classes (i.e. Bayesian indicator variable methods), and non-linear relationships between the return abundance of age classes for a stock in prior years (i.e. boosted regression trees). However, despite the observed value in comparing performance of alternative forecast model types inherent in the FRI forecasting approach, significant forecast errors have occurred. The range of models explored only leveraged data for sibling age classes of the same stock, and the potential for human error in the manual model selection process cannot be overlooked and present opportunity for improvement with automated ensemble approaches such as the Random Forest ensemble explored here.
 
-We demonstrate here how modern computational modeling tools approaches can provide improvements in ecological forecasting. @ward2014 also explored the use of models similar to those used here in the context of ecological forecasting of time-series data from natural populations. They however found that the sorts of modern computational tools explored here generally performed worse than simple autoregressive models, while being substantially more computationally intensive. In contrast we found that our lag\_1 benchmark model was always outperformed or equaled by one or more of our models across every resolution we evaluated. What might explain this difference? @ward2014 specifically designed their study around making predictions of future population size solely based on historic population size, while the forecast methods we explore here were informed by the abundance of multiple salmon age classes or stocks, and in some cases by environmental conditions and the abundance of other salmon species. In this way, the methods evaluated by @ward2014 are most similar to the EDM models explored here, which provided the least improvement over our lagged benchmark models. We note however, that identification and inclusion of environmental relationships may improve EDM forecasts but was beyond the scope of this analysis.
+We demonstrate here how modern computational modeling tools approaches can provide improvements in ecological forecasting. @ward2014 also explored the use of models similar to those used here in the context of ecological forecasting of time-series data from natural populations. They however found that the sorts of modern computational tools explored here generally performed worse than simple autoregressive models, while being substantially more computationally intensive. In contrast we found that our lag-1 benchmark model was always outperformed or equaled by one or more of our models across every resolution we evaluated. What might explain this difference? @ward2014 specifically designed their study around making predictions of future population size solely based on historic population size, while the forecast methods we explore here were informed by the abundance of multiple salmon age classes or stocks, and in some cases by environmental conditions and the abundance of other salmon species. 
 
-We would only expect computer age methods to provide an improvement over simpler methods if there are substantial complexities in the relationship between past and future abundance that simpler models miss (i.e. the simpler models are misspecified). The results of @ward2014 and the performance of the EDM models as used here (without environmental covariates or cross-stock predictions) relative to our benchmark models suggest simpler models may indeed be preferable when only historic timeseries of individual stocks are available as a data source, and additional informative predictors (such as environmental data or nearby related systems) are not available. Similarly, application of computer age methods are often data intensive, and our current application is for the Bristol Bay sockeye salmon system which stands as an outlier in terms of both the quality and duration (1963) of data available on which to base predictions. More limited time series of reconstructed return abundance are often available in other regions and for other salmon species. It is possible that when constrained to forecasting salmon abundance for stocks with limited numbers of annual observations for training, testing and tuning, simpler models may indeed provide more robust prediction.
+<!-- In this way, the methods evaluated by @ward2014 are most similar to the EDM models explored here, which provided the least improvement over our lagged benchmark models. We note however, that identification and inclusion of environmental relationships may improve EDM forecasts but was beyond the scope of this analysis. -->
 
-In contrast the DLM and machine learning methods both have access to additional information that may account for their ability to outperform simpler models. The DLM model, while still relying solely on historic return data of individual river systems, provides structure that autoregressive style models might miss. In particular, the DLM model leverages our ability to track cohorts over time and use these data as predictors in a model while explicitly accounting changes in average salmon population productivity, survival, and maturation schedule over time. The machine learning methods explored here have access to much more data than the historic returns alone, including environmental conditions and abundance of other salmonids. In addition, the machine learning methods used here are able to leverage correlations in returns across multiple age groups and river systems (Fig.\@ref(fig:imp-plot)). While we have access to over 50 years of data, longer than some of the series reported in @ward2014, our sample sizes are still minute compared to the sample sizes in most applications of machine learning methods, indicating that these methods can still be used with the relatively small sample sizes often encountered in forecasting the population dynamics of harvested species. The results of @ward2014 suggest that more complex models may provide little benefit when the only data available are historic trends in the population being forecasted. We find though that modern computational forecasting tools can provide meaningful improvements when given additional covariates and/or structure.
+We would only expect the types of models employed here to provide an improvement over simpler methods if there are substantial complexities in the relationship between past and future abundance that simpler models miss (i.e. the simpler models are misspecified). The results of @ward2014 suggest simpler models may indeed be preferable when only historic timeseries of individual stocks are available as a data source, and additional informative predictors (such as environmental data or nearby related systems) are not available. Similarly, application of computer age methods are often data intensive, and our current application is for the Bristol Bay sockeye salmon system which stands as an outlier in terms of both the quality and duration (1963) of data available on which to base predictions. More limited time series of reconstructed return abundance are often available in other regions and for other salmon species. It is possible that when constrained to forecasting salmon abundance for stocks with limited numbers of annual observations for training, testing and tuning, simpler models may indeed provide more robust prediction.
+
+<!-- In contrast the DLM and machine learning methods both have access to additional information that may account for their ability to outperform simpler models. The DLM model, while still relying solely on historic return data of individual river systems, provides structure that autoregressive style models might miss. In particular, the DLM model leverages our ability to track cohorts over time and use these data as predictors in a model while explicitly accounting changes in average salmon population productivity, survival, and maturation schedule over time.  -->
+
+The machine learning methods explored here have access to much more data than the historic returns alone though, including environmental conditions and abundance of other salmonids. In addition, the machine learning methods used here are able to leverage correlations in returns across multiple age groups and river systems (Fig.\@ref(fig:imp-plot)). While we have access to over 50 years of data, longer than some of the series reported in @ward2014, our sample sizes are still minute compared to the sample sizes in most applications of machine learning methods, indicating that these methods can still be used with the relatively small sample sizes often encountered in forecasting the population dynamics of harvested species. The results of @ward2014 suggest that more complex models may provide little benefit when the only data available are historic trends in the population being forecasted. We find though that modern computational forecasting tools can provide meaningful improvements when given additional covariates and/or structure.
 
 <!-- What other data should we suggest? We don’t include any in-river condition data, do we just not have it? Thoughts on other places we can invest? [g] -->
 
-# Conclusions  {.unnumbered}
+# Conclusion  {.unnumbered}
 
 The field of ecology is generally concerned with developing theories and evidence for why ecosystems are structured and behave the ways they do. This pursuit of heuristic understanding can lead to construction of interpretable models that provide insight about system dynamics, but limited predictive power. However, for specific application in areas such as preseason salmon abundance forecasts the objective is solely to obtain accurate and precise predictions, one year into the future. We designed and optimized our models solely around predictive power, and while some methods such as empirical dynamic modeling and dynamic linear models can provide both insight and predictive skill, the machine learning methods tested here (boosted regression tree and random forests) are focused on prediction alone, with limited scope to improve ecological insight. In the case of natural resources management that often depends on making decisions today based on predictions about the future, prediction-focused methods such as those presented here can present substantial opportunity. Here we show that incorporating multiple predictive models into a statistical ensemble was able to provide some meaningful improvements in the pre-season forecast accuracy of Bristol Bay sockeye salmon. 
 
@@ -549,11 +577,16 @@ The field of ecology is generally concerned with developing theories and evidenc
 
 Accurate forecasts are a crucial part of natural resource management, a task made increasingly challenging by climate change. Our gains in forecast accuracy for the economically and ecologically critical Bristol Bay sockeye salmon fishery demonstrate the ability of modern computational tools to make meaningful improvements in short-term predictive ability for the abundance of natural populations faced with a rapidly changing environment. By combining multiple modern computational tools we are able to identify likely frontiers in forecast performance given currently available data. However, even for this relatively robust dataset we were fundamentally unable to predict the returns of particular river systems and age classes in certain years. The collective failure of multiple methods in specific time steps and locations helps clarify instances in which the only likely path to meaningful forecast improvement is collection of additional data, while also highlighting the potentially irreducible impact of observation error on the limits of forecast performance. It is critical that we allocate resources to both the advancement of predictive modeling methods in ecology, and to the hard work of collecting the data from the natural world that are the foundation of any successful forecasting efforts.
 
-# Acknowledgements {.unnumbered}
+
+# Author contribution statement {.unnumbered}
+
+D.O., C.C., and P.K. conducted the analyses. All authors contributed to the development of the manuscript.
+
+# Funding statement {.unnumbered}
 
 Funding for this study was provided by the Bristol Bay Regional Seafood Development Association, by the Bristol Bay Seafood Processors, and by Douglas and Joyce McCallum.
 
-# Data Availability {.unnumbered}
+# Data availability statement {.unnumbered}
 
 All data, code, and package dependencies needed to fully reproduce our results are publicly available at www.github.com/danovando/salmon-forecast-paper.
 
@@ -565,7 +598,7 @@ All data, code, and package dependencies needed to fully reproduce our results a
 
 <!-- Materials can be accessed at www.github.com/danovando/salmon-forecast-paper -->
 
-# Literature Cited {.unnumbered}
+# References {.unnumbered}
 
 ::: {#refs}
 :::

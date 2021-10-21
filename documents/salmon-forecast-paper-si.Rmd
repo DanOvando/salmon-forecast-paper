@@ -1,5 +1,6 @@
 ---
-title: "Identifying Frontiers in Ecological Forecasting with Modern Computational Tools"
+title: Improving Forecasts of Sockeye Salmon (*Oncorhynchus nerka*) with Modern Computational Tools.
+subtitle: Supporting Information
 author:
 - Daniel Ovando*
 - Curry Cunningham
@@ -12,11 +13,10 @@ output:
   bookdown::word_document2:
     reference_docx: template.docx
   pdf_document: default
-subtitle: Supporting Information
 bibliography: ../references.bib
 csl: canadian-journal-of-fisheries-and-aquatic-sciences.csl
 params:
-  results_name: v1.0.0.9000
+  results_name: v1.0.1.9000
 linkcolor: blue
 toc: FALSE
 header-includes:
@@ -262,11 +262,9 @@ age_system_performance_figure
 +----------------------------------------+-------------------------------------------------------------------------------+
 | Dynamic Linear Model (dlm)             | Sibling regression with dynamic components                                    |
 +----------------------------------------+-------------------------------------------------------------------------------+
-| Simplex                                | simplex projection                                                            |
+| Empirical Dynamic Modeling  (multiview)| Simplex projection based on lagged values                                     |
 +----------------------------------------+-------------------------------------------------------------------------------+
-| S-map                                  | Sequentially locally weighted global linear maps                              |
-+----------------------------------------+-------------------------------------------------------------------------------+
-| Lag-1 (lag_1)                            | Forecast next year equal to observed returns last year                        |
+| Lag-1                       | Forecast next year equal to observed returns last year                        |
 +----------------------------------------+-------------------------------------------------------------------------------+
 | Ensemble                               | A random forest ensemble made of other candidate models             |
 +----------------------------------------+-------------------------------------------------------------------------------+

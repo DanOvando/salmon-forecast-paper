@@ -33,7 +33,7 @@ run_dlm_forecast <- FALSE
 
 run_ml_forecast <- FALSE
 
-fit_statistical_ensemble <- TRUE
+fit_statistical_ensemble <- FALSE
 
 run_importance <- TRUE
 
@@ -649,8 +649,8 @@ frish_age_system_forecast <- frish_forecast %>%
   ungroup()
 
 
-age_system_forecast <- age_system_forecast %>% 
-  bind_rows(frish_age_system_forecast)
+# age_system_forecast <- age_system_forecast %>% 
+#   bind_rows(frish_age_system_forecast)
 
 # evaluate performance
 
@@ -1647,19 +1647,63 @@ if (file.exists(file.path(results_dir, "next_forecast.rds"))) {
       group_by(pred_system, short_feature) %>%
       summarise(mean_importance = mean(Gain))
 
+    
+    # Japan		Japan & South Korea
+    # M&I		Russia: Mainland & Islands
+    # WKam		Western Kamchatka
+    # EKam		Eastern Kamchatka
+    # WAK		Western Alaska
+    # SPen		Southern Alaska Peninsula
+    # Kod		Kodiak
+    # CI		Cook Inlet
+    # PWS		Prince William Sound
+    # SEAK		Southeast Alaska
+    # NBC		Northern British Columbia
+    # SBC		Southern British Columbia
+    # WA		Washington State
+    # WC		West Coast USA
+    
+    
+    region_lookup <- read_csv(here("data","region_lookup.csv")) %>% 
+      pivot_wider(names_from = abrev, values_from = region) %>% 
+      janitor::clean_names() %>% 
+      pivot_longer(tidyselect::everything(),names_to = "abrev", values_to = "region") 
+      
+      salmonids <- expand_grid(salmon = c("chum","pink"), abrev = region_lookup$abrev) %>% 
+        left_join(region_lookup, by = "abrev") %>% 
+        mutate(lookup = paste(salmon, abrev, sep = "_"),
+               name = paste(snakecase::to_title_case(salmon), region, sep = ": ")) %>% 
+        select(lookup, name) %>% 
+        mutate(Description = "Natural origin salmon returns",
+               Source = "Ruggerone and Irvine (2018)")
+      
+      return_lookup <- tibble(lookup = paste0("past_", unique(data$system))) %>% 
+        mutate(name = str_replace_all(lookup, "past_", "Past ")) %>% 
+        mutate(Description = "Past river system returns",
+               Source = "FRI")
+    
+      
+      painful_lookup <- tribble(~"lookup",~"name",~"Description",~"Source",
+                                "env_sst", "Sea Surface Temperature","Median Bristol Bay SST between May-August in year cohort entered ocean.","ERDDAP HadISST",
+                                "env_slp", "Sea Level Pressure","Median Bristol Bay SLP between May-August in year cohort entered ocean.","ERDDAP ICOADS",
+                                "env_pdo", "Pacific Decadal Oscillation","Mean PDO index between May-August in year cohort entered ocean.","JISAO",
+                                "env_upstr", "Wind Stress","Median Bristol Bay wind stress between May-August in year cohort entered ocean.","ERDDAP ICOADS",
+                                "ret_yr", "Return Year","","",
+                                "spawner_strength","Spawner Numbers","Number of parents","FRI") %>% 
+        rbind(salmonids) %>% 
+        rbind(return_lookup)
+      
+    
+    system_importance_table <- system_importance %>% 
+      left_join(painful_lookup, by = c("short_feature" ="lookup"))
+      
+    
+  write_rds(system_importance_table,file.path(results_dir,"system_importance_table.rds"))
 
-    system_varimportance_figure <- system_importance %>%
-      mutate(
-        short_feature = case_when(
-          short_feature == "ret_yr" ~ "Return Year",
-          short_feature == "env_sst" ~ "SST",
-          short_feature == "env_slp" ~ "SLP",
-          TRUE ~ short_feature
-        )
-      ) %>%
-      mutate(short_feature = snakecase::to_title_case(short_feature)) %>%
-      filter(mean_importance > 0.05) %>%
-      ggplot(aes(reorder(short_feature, mean_importance), mean_importance)) +
+    system_varimportance_figure <- system_importance_table %>% 
+      group_by(pred_system) %>% 
+      filter(mean_importance > 0.075) %>%
+      ggplot(aes(reorder(name, mean_importance), mean_importance)) +
       geom_hline(aes(yintercept = 0)) +
       geom_col() +
       facet_wrap( ~ pred_system, scales = "free_y") +
