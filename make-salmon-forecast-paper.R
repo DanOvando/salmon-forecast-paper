@@ -13,7 +13,7 @@ purrr::walk(functions, ~ source(here::here("functions", .x)))
 return_table_year <- 2020
 
 prep_run(
-  results_name = "v1.0.1.9000",
+  results_name = "v1.1.0",
   results_description = "draft publication with boost tree improvements loo starting in 1990",
   first_year = 1990,
   last_year = return_table_year,

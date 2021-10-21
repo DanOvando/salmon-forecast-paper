@@ -7,7 +7,7 @@ output:
 bibliography: "../references.bib"
 csl: canadian-journal-of-fisheries-and-aquatic-sciences.csl
 params: 
-  results_name: ["v1.0.1.9000"]
+  results_name: ["v1.1.0"]
 linkcolor: blue
 toc: false
 header-includes:
