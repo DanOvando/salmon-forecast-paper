@@ -21,7 +21,9 @@ require(tidybayes)
 # Define Workflow Paths ============================================
 # dir.results <- file.path(here(), "results", "v0.5.5")
 # dir.results <- file.path(here(), "results", "v1.0.0.9000-2021")
-dir.results <- file.path(here(), "results", "v1.1-2021")
+# dir.results <- file.path(here(), "results", "v1.1-2021")
+dir.results <- file.path(here(), "results", "v1.1.0")
+
 dir.data <- file.path(here(), "data")
 dir.figs <- file.path(here(), "imgs")
 dir.fxns <- file.path(here(), "functions")
@@ -33,15 +35,22 @@ dlm <- read.csv(file.path(dir.results,"dlm_loo_results.csv"), header=TRUE, strin
 edm <- read.csv(file.path(dir.results,"edm_loo_results.csv"), header=TRUE, stringsAsFactors=FALSE)
 # rnn <- read.csv(file.path(dir.results,"rnn_loo_results.csv"), header=TRUE, stringsAsFactors=FALSE)
 parsnip <- read.csv(file.path(dir.results,"parsnip_loo_results.csv"), header=TRUE, stringsAsFactors=FALSE)
-nextl <- read.csv(file.path(dir.results,"next_loo_results.csv"), header=TRUE, stringsAsFactors=FALSE)
+# nextl <- read.csv(file.path(dir.results,"next_loo_results.csv"), header=TRUE, stringsAsFactors=FALSE)
 benchmark <- read.csv(file.path(dir.results,"benchmark_loo_results.csv"), header=TRUE, stringsAsFactors=FALSE)
 
 # Combined
 result <- rbind(dlm, edm, parsnip, benchmark)# nextl)
 result <- data.frame(result)
 # Rename edm
-result$model[result$model=="simplex_one system top6 ages"] <- "edm_simplex"
-result$model[result$model=="smap_one system top6 ages"] <- "edm_smap"
+
+# V1.1-2021
+# result$model[result$model=="simplex_one system top6 ages"] <- "edm_simplex"
+# result$model[result$model=="smap_one system top6 ages"] <- "edm_smap"
+
+
+# V1.1.0
+result$model[result$model=="multiview"] <- "edm"
+
 
 # Create Factors
 result$model <- as.factor(result$model)
@@ -64,11 +73,13 @@ names(dat)[3] <- "system"
 # result.fri <- cbind("FRI", fri$retYr-fri$fwAge-fri$oAge-1, fri$retYr, 
 #                     fri$System, paste0(fri$fwAge,"_",fri$oAge))
 # Summarize by Stock and Age =======================================
-result.stock <- result %>% group_by(model, return_year, system) %>% 
+result.stock <- result %>% filter(age_group %in% c("1_2","1_3","2_2","2_3")) %>% 
+                  group_by(model, return_year, system) %>% 
                   summarize(obs=sum(observed_returns, na.rm=TRUE),
                             pred=sum(predicted_returns, na.rm=TRUE))
 
-result.age <- result %>% group_by(model, return_year, age_group) %>% 
+result.age <- result %>% filter(system != "Togiak", system !="Alagnak") %>%
+              group_by(model, return_year, age_group) %>% 
               summarize(obs=sum(observed_returns, na.rm=TRUE),
               pred=sum(predicted_returns, na.rm=TRUE))
 
@@ -126,7 +137,7 @@ g.rmse.stock <- result.stock %>% filter(model!="runmean_forecast", model!="lag_f
   mutate(pct.diff=(pred-obs)/obs) %>% 
   group_by(system, model) %>% summarize(mape=mean(abs(pct.diff)),
                                         rmse=yardstick::rmse_vec(truth=obs, estimate=pred)) %>% 
-  ggplot(aes(x=model, y=mape, fill=model)) +
+  ggplot(aes(x=model, y=rmse, fill=model)) +
   theme_linedraw() +
   scale_fill_colorblind() +
   geom_hline(yintercept = 0, col="black") +
@@ -135,7 +146,7 @@ g.rmse.stock <- result.stock %>% filter(model!="runmean_forecast", model!="lag_f
   # facet_wrap(~system, ncol=7) +
   theme(axis.text.x=element_text(angle=45, hjust=1, vjust=1),
         legend.position="top") +
-  scale_y_continuous(labels = scales::percent) +
+  # scale_y_continuous(labels = scales::percent) +
   # ylab("Mean Absolute Percent Error") +
   ylab("Root Mean Square Error")
 g.rmse.stock
@@ -161,13 +172,14 @@ ggsave(file.path(dir.figs, "MAPE Age.pdf"), plot=g.mape.age, height=6, width=9, 
 
 # Egegik Lines ======================================
 dat.eg <- dat %>% filter(system=="Egegik", retYr>=1990,
-                         age_group %in% c("1_2","1_3","2_2","2_3"))
+                         age_group %in% c("1_2","1_3","2_2","2_3")) 
 
-g.eg <- result %>% filter(system=="Egegik") %>% 
+g.eg <- result %>% filter(system=="Egegik") %>% group_by(model, return_year, system, age_group) %>% 
+                    summarize("predicted_returns"=sum(predicted_returns)) %>% 
                     filter(model!="runmean_forecast", model!="lag_forecast", 
                            # model!="edm_smap"
                            ) %>%
-          ggplot(aes(x=return_year, y=predicted_returns/1e6, col=model)) +
+          ggplot(aes(x=return_year, y=predicted_returns/1e3, col=model)) +
             theme_linedraw() +
             scale_color_colorblind() +
             geom_col(aes(x=retYr, y=ret/1e3), data=dat.eg, fill='darkgray', col=NA) +
@@ -201,7 +213,7 @@ for(s in 1:n.temp.stocks) {
                   filter(model!="runmean_forecast", model!="lag_forecast", 
           # model!="edm_smap"
          ) %>%
-    ggplot(aes(x=return_year, y=predicted_returns/1e6, col=model)) +
+    ggplot(aes(x=return_year, y=predicted_returns/1e3, col=model)) +
     theme_linedraw() +
     scale_color_colorblind() +
     geom_col(aes(x=retYr, y=ret/1e3), data=dat.eg, fill='darkgray', col=NA) +
@@ -222,14 +234,15 @@ dev.off()
 
 
 # Stock Lines =======================================================
-dat.temp <- dat %>% filter(retYr>=1990) %>% group_by(system, retYr) %>% 
+dat.temp <- dat %>% filter(retYr>=1990, age_group %in% c("1_2","1_3","2_2","2_3")) %>% 
+              group_by(system, retYr) %>% 
               summarize(ret=sum(ret, na.rm=TRUE))
 
 g.line <- result.stock %>% 
   filter(model!="runmean_forecast", model!="lag_forecast", 
          # model!="edm_smap"
          ) %>%
-  ggplot(aes(x=return_year, y=pred/1e6, col=model)) +
+  ggplot(aes(x=return_year, y=pred/1e3, col=model)) +
   theme_linedraw() +
   scale_color_colorblind() +
   geom_col(aes(x=retYr, y=ret/1e3), data=dat.temp, fill='darkgray', col="gray") +
@@ -247,14 +260,16 @@ ggsave(file.path(dir.figs, "System Lines.pdf"), plot=g.line, height=6, width=9, 
 stocks.sub <- c("Egegik","Wood")
 n.stocks.sub <- length(stocks.sub)
 
-dat.temp <- dat %>% filter(retYr>=1990, system %in% stocks.sub) %>% group_by(system, retYr) %>% 
+dat.temp <- dat %>% filter(retYr>=1990, system %in% stocks.sub, 
+                             age_group %in% c("1_2","1_3","2_2","2_3")) %>%
+              group_by(system, retYr) %>% 
               summarize(ret=sum(ret, na.rm=TRUE))
 
 g.line.sub <- result.stock %>% 
   filter(model!="runmean_forecast", model!="lag_forecast", 
          # model!="edm_smap", 
          system %in% stocks.sub) %>%
-  ggplot(aes(x=return_year, y=pred/1e6, col=model)) +
+  ggplot(aes(x=return_year, y=pred/1e3, col=model)) +
   theme_linedraw() +
   scale_color_colorblind() +
   geom_col(aes(x=retYr, y=ret/1e3), data=dat.temp, fill='darkgray', col=NA) +
