@@ -53,13 +53,13 @@ options(dplyr.summarise.inform = FALSE)
 
 # min_year <- 1963 # only include data greater than or equal this year
 
-fit_parsnip_models <- TRUE
+fit_parsnip_models <- FALSE
 
 fit_rnn_models <- FALSE
 
 run_query_erddap <-  TRUE
 
-run_next_forecast <- TRUE
+run_next_forecast <- FALSE
 
 by_system <- TRUE
 
@@ -105,6 +105,12 @@ max_year <- return_table_year
 data <- read.csv(here::here("data", paste0(return_table_year,".csv")), stringsAsFactors = FALSE) %>% 
   janitor::clean_names() %>%
   mutate(age_group = paste(fw_age, o_age, sep = "."))
+
+data %>% 
+  group_by(ret_yr, system) %>% 
+  summarise(returns = sum(ret, na.rm = TRUE)) %>% 
+  ggplot(aes(ret_yr,returns, fill = system)) + 
+  geom_col()
 
 ruggerone_data <-
   tidyxl::xlsx_cells(
@@ -563,7 +569,7 @@ if (fit_parsnip_models == TRUE){
         loo_preds <- looframe %>%
           ungroup() %>% 
           mutate(p_done = 1:nrow(.)) %>% 
-          mutate(p_done = percent(p_done / length(p_done))) %>% 
+          mutate(p_done = scales::percent(p_done / length(p_done))) %>% 
           # slice(15) %>% 
           # filter(model_type == "rand_forest") %>%
           # sample_n(20) %>%
@@ -1250,18 +1256,21 @@ age_system_forecast <- forecasts %>%
 
 total_next_forecast <-  next_forecast %>% 
   filter(ret_yr == max(ret_yr)) %>% 
-  group_by(ret_yr) %>% 
-  summarise(observed = sum(ret) / 1000, forecast = sum(pred) / 1000)
+  group_by(ret_yr,model_type) %>% 
+  summarise(observed = sum(ret) / 1000, forecast = sum(pred) / 1000) %>% 
+  rename(model= model_type) %>% 
+  ungroup()
 
 total_past_forecast <- forecasts %>% 
   bind_rows(total_next_forecast) %>% 
-  group_by(ret_yr) %>% 
+  group_by(ret_yr,model) %>% 
   summarise(observed = sum(observed),
             forecast = sum(forecast))
 
 next_total_forecast_plot <- total_past_forecast %>%
+  filter(ret_yr >2010) %>% 
   ungroup() %>%
-  mutate(label = ifelse(ret_yr == max(ret_yr), paste("2020 Forecast:", round(forecast),"Million"),'')) %>% 
+  mutate(label = ifelse(ret_yr == max(ret_yr), paste(return_table_year + 1," Forecast:", round(forecast),"Million"),'')) %>% 
   ggplot() +
   geom_col(aes(ret_yr, observed), alpha = 0.75) +
   geom_line(
@@ -1286,8 +1295,9 @@ next_total_forecast_plot <- total_past_forecast %>%
     shape = 21,
     show.legend = FALSE
   ) +
-  scale_y_continuous(name = "Returns (millions)", limits = c(0,75)) +
-  scale_x_continuous(name = '', limits = c(NA, 2023)) 
+  scale_y_continuous(name = "Returns (millions)") +
+  scale_x_continuous(name = '', limits = c(NA, 2023)) +
+  facet_wrap(~model)
 
 next_total_forecast_plot
 
@@ -1464,8 +1474,33 @@ system_performance %>%
 
 # make forecast table -----------------------------------------------------
 
+next_forecast %>% 
+  filter(ret_yr == max(ret_yr)) %>% 
+  ggplot(aes(dep_age, pred)) + 
+  geom_col() + 
+  facet_grid(model_type~system)
+
+rawer_forecast_table <- next_forecast %>% 
+  mutate(pred = pmax(0,pred)) %>% 
+  ungroup() %>% 
+  rename(forecast_returns = pred,
+         observed_returns = ret,
+         age_group = dep_age) %>% 
+  select(ret_yr, age_group, pred_system, model_type, observed_returns,forecast_returns) %>% 
+  arrange(desc(ret_yr, model_type, system))
 
 
+rawer_forecast_table %>% 
+  filter(ret_yr == max(ret_yr)) %>% 
+  group_by(pred_system, model_type) %>% 
+  summarise(forecast_returns = sum(forecast_returns) / 1000) %>% 
+  ggplot(aes(reorder(pred_system,forecast_returns), forecast_returns, fill = model_type)) + 
+  geom_col(position = "dodge") + 
+  scale_x_discrete(name = "System") + 
+  scale_y_continuous(name = "Forecast Returns (Millions of fish)")
+
+
+write_csv(rawer_forecast_table %>% mutate_if(is.numeric,round), path = file.path(results_dir,"rawer-machine-learning-forecast-table.csv"))
 
 raw_forecast_table <- next_forecast %>% 
   ungroup() %>% 
@@ -1474,6 +1509,7 @@ raw_forecast_table <- next_forecast %>%
          age_group = dep_age) %>% 
   ungroup() %>% 
   mutate(
+    pred = pmax(0,pred),
     age_group= forcats::fct_relevel(age_group, c("1.2","1.3","2.2","2.3"))) %>% 
   select(ret_yr, system, age_group, forecast, model_type) %>% 
   bind_rows(ml_forecast) %>% 
@@ -1494,34 +1530,34 @@ raw_forecast_table %>%
   ggplot(aes(ret_yr, total_forecast, color  = model_type)) + 
   geom_line()
 
-write_csv(raw_forecast_table %>% mutate_if(is.numeric,round), "raw-machine-learning-forecast-table.csv")
+write_csv(raw_forecast_table %>% mutate_if(is.numeric,round), path = file.path(results_dir,"raw-machine-learning-forecast-table.csv"))
 
 total_vars <- colnames(raw_forecast_table)
 
 total_vars <- total_vars[str_detect(total_vars,"(\\.)|(Totals)")]
 
-forecast_table <- raw_forecast_table %>%
-  group_by(ret_yr, model_type) %>%
-  gt(rowname_col = "system") %>%
-  summary_rows(
-    groups = TRUE,
-    columns = vars(total_vars) ,
-    fns = list(Totals = "sum"),
-    formatter = fmt_number,
-    decimals = 0,
-    use_seps = TRUE
-    
-  ) %>%
-  gt::fmt_number(columns = total_vars, decimals = 0) %>%
-  gt::tab_spanner(label = "Age Group",
-                  columns = (total_vars[total_vars != "Totals"])) %>%
-  gt::tab_style(
-    style = cell_text(weight = "bold"),
-    locations = list(cells_summary(),
-                     cells_body(columns = vars(Totals)))
-  )
-
-forecast_table
+# forecast_table <- raw_forecast_table %>%
+#   group_by(ret_yr, model_type) %>%
+#   gt(rowname_col = "system") %>%
+#   summary_rows(
+#     groups = TRUE,
+#     columns = vars(total_vars) ,
+#     fns = list(Totals = "sum"),
+#     formatter = fmt_number,
+#     decimals = 0,
+#     use_seps = TRUE
+#     
+#   ) %>%
+#   gt::fmt_number(columns = total_vars, decimals = 0) %>%
+#   gt::tab_spanner(label = "Age Group",
+#                   columns = (total_vars[total_vars != "Totals"])) %>%
+#   gt::tab_style(
+#     style = cell_text(weight = "bold"),
+#     locations = list(cells_summary(),
+#                      cells_body(columns = vars(Totals)))
+#   )
+# 
+# forecast_table
 # gt::gtsave(forecast_table,"ml-forecast-table.png", zoom = 10, expand = 10)
 # 
 # gt::gtsave(forecast_table,"ml-forecast-table.tex")
