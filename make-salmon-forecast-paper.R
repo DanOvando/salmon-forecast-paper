@@ -37,7 +37,7 @@ fit_statistical_ensemble <- FALSE
 
 run_importance <- TRUE
 
-knit_manuscript <- TRUE
+knit_manuscript <- FALSE
 
 scalar <- 1000
 
@@ -1070,7 +1070,8 @@ top_system_forecast <- system_forecast %>%
 system_forecast_srmse <- top_system_forecast %>%
   group_by(model, system) %>%
   summarise(max = max(observed, forecast),
-            srmse = unique(srmse))
+            srmse = unique(srmse),
+            r2 = yardstick::rsq_vec(observed, forecast))
 
 system_forecast_figure <- top_system_forecast %>%
   ggplot() +
@@ -1081,15 +1082,24 @@ system_forecast_figure <- top_system_forecast %>%
     size = 3,
     hjust = "left"
   ) +
+  geom_richtext(
+    data = system_forecast_srmse,
+    aes(2000, max * .9, label = glue::glue("R<sup>2</sup> = {round(r2,2)}")),
+    size = 3,
+    hjust = "left",
+    label.colour = "transparent",
+    fill = "transparent"
+  ) +
   geom_point(aes(year, forecast, fill = model, alpha = srmse),
              shape = 21,
              size = 2) +
   facet_wrap( ~ system, scales = "free_y") +
   fishualize::scale_fill_fish_d(name = '', option = "Trimma_lantana") +
   fishualize::scale_color_fish_d(name = '', option = "Trimma_lantana") +
-  scale_alpha_continuous(range = c(1, 0.25),
+  scale_alpha_continuous(    limits = c(0.6,1),
+                             range = c(1, .25),
                          name = "SRMSE",
-                         guide = FALSE) +
+                         guide = "none") +
   scale_x_continuous(name = '') +
   scale_y_continuous(expand = expansion(c(0, .05)), name = "Returns (Millions of Salmon)")
 
@@ -1133,7 +1143,9 @@ top_age_forecast <- age_forecast %>%
 age_forecast_srmse <- top_age_forecast %>%
   group_by(model, age_group) %>%
   summarise(max = max(observed, forecast),
-            srmse = unique(srmse))
+            srmse = unique(srmse),
+            r2 = yardstick::rsq_vec(observed, forecast))
+
 
 age_forecast_figure <- top_age_forecast %>%
   # mutate(age_group = str_replace_all(age_group, "_",".")) %>%
@@ -1145,6 +1157,14 @@ age_forecast_figure <- top_age_forecast %>%
     size = 3,
     hjust = "left"
   ) +
+  geom_richtext(
+    data = age_forecast_srmse,
+    aes(2000, max * .9, label = glue::glue("R<sup>2</sup> = {round(r2,2)}")),
+    size = 3,
+    hjust = "left",
+    label.colour = "transparent",
+    fill = "transparent"
+  ) +
   geom_point(aes(year, forecast, fill = model, alpha = srmse),
              shape = 21,
              size = 2) +
@@ -1152,10 +1172,10 @@ age_forecast_figure <- top_age_forecast %>%
   fishualize::scale_fill_fish_d(name = '', option = "Trimma_lantana") +
   fishualize::scale_color_fish_d(name = '', option = "Trimma_lantana") +
   scale_alpha_continuous(
+    limits = c(0.6,1),
     range = c(1, 0.25),
     labels = percent,
-    name = "SRMSE",
-    guide = FALSE
+    name = "SRMSE"
   ) +
   scale_y_continuous(expand = expansion(c(0, .05)), name = "Returns (Millions of Salmon)") +
   scale_x_continuous(name = '')
@@ -1250,6 +1270,11 @@ top_ensemble_system_forecast <- system_forecast %>%
   filter(combo %in% top_ensemble$combo) %>%
   left_join(ensemble_performance, by = c("system", "model"))
 
+top_ensemble_system_forecast_summary <- top_ensemble_system_forecast %>% 
+  group_by(system) %>% 
+  summarise(r2 = yardstick::rsq_vec(observed, forecast),
+            max = max(observed, forecast))
+
 system_ensemble_forecast_figure <- top_ensemble_system_forecast %>%
   mutate(model = fct_recode(model, FRI = "fri",
          "Random Forest Ensemble" = "random_forest_ensemble")) %>% 
@@ -1260,6 +1285,14 @@ system_ensemble_forecast_figure <- top_ensemble_system_forecast %>%
     aes(year, forecast, shape = model, fill = ens_improvement),
     size = 2,
     alpha = 0.95
+  ) +
+  geom_richtext(
+    data = top_ensemble_system_forecast_summary,
+    aes(2000, max * 1.05, label = glue::glue("R<sup>2</sup> = {round(r2,2)}")),
+    size = 3,
+    hjust = "left",
+    label.colour = "transparent",
+    fill = "transparent"
   ) +
   scale_fill_gradient(
     low = "white",
@@ -1273,7 +1306,7 @@ system_ensemble_forecast_figure <- top_ensemble_system_forecast %>%
   # scale_alpha_continuous(range = c(1,0.25), name = "MASE") +
   scale_shape_manual(values = c(24, 21), name = '') +
   scale_x_continuous(name = '') +
-  scale_y_continuous(expand = expansion(c(0, .05)), name = "Returns (Millions of Salmon)") +
+  scale_y_continuous(expand = expansion(c(0, .1)), name = "Returns (Millions of Salmon)") +
   theme(legend.direction = "horizontal",
         legend.position = c(.7, .1)) +
   facet_wrap( ~ system, scales = "free_y")

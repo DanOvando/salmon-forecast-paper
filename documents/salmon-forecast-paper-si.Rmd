@@ -37,6 +37,8 @@ library(Cairo)
 library(extrafont)
 library(here)
 library(scales)
+library(knitr)
+library(kableExtra)
 extrafont::loadfonts()
 
 results_dir <- here("results", params$results_name)
@@ -272,3 +274,91 @@ age_system_performance_figure
 +----------------------------------------+-------------------------------------------------------------------------------+
 
 : (\#tab:models) Candidate forecasting models evaluated
+
+
+
++----------------------------------------+-------------------------------------------------------------------------------+
+| Model Name                             | Description                                                                   |
++========================================+===============================================================================+
+| Boosted Regression Trees (boost\_tree) | An ensemble of boosted regression trees                                       |
++----------------------------------------+-------------------------------------------------------------------------------+
+| Random Forest (rand\_forest)           | An ensemble of regression trees                                               |
++----------------------------------------+-------------------------------------------------------------------------------+
+| Recurrent Neural Network (rnn)         | A neural network with a memory component implemented through recurrent layers |
++----------------------------------------+-------------------------------------------------------------------------------+
+| Dynamic Linear Model (dlm)             | Sibling regression with dynamic components                                    |
++----------------------------------------+-------------------------------------------------------------------------------+
+| Empirical Dynamic Modeling  (multiview)| Simplex projection based on lagged values                                     |
++----------------------------------------+-------------------------------------------------------------------------------+
+| Lag-1                       | Forecast next year equal to observed returns last year                        |
++----------------------------------------+-------------------------------------------------------------------------------+
+| Ensemble                               | A random forest ensemble made of other candidate models             |
++----------------------------------------+-------------------------------------------------------------------------------+
+|                                        |                                                                               |
++----------------------------------------+-------------------------------------------------------------------------------+
+
+: (\#tab:boost-tree-params) Range of tuning parameters tested for boosted regression tree
+
+
+
+\newpage
+
+
+```{r tuning-table, results="asis"}
+
+
+boost_tree_grid <-
+  tribble(
+    ~ "Variable",
+    ~ "Abbreviation",
+    ~ "Range Tested",
+    "Minimum node size",
+    "min_n",
+    "[2,10]",
+    "Maximum tree depth",
+    "tree_depth",
+    "[2,15]",
+    "Learning rate",
+    "learn_rate",
+    "[0.05,0.6]",
+    "Number of randomly sampled predictors",
+    "mtry",
+    "[1,# of Predictors]",
+    "Loss reduction for further splitting",
+    "loss_reduction",
+    "[1e-15,2]",
+    "Number of trees",
+    "trees",
+    "[500,2000]"
+  ) %>% 
+  mutate(model = "Boosted Regression Tree (xgboost)")
+
+
+
+rf_grid <-
+  tribble(
+    ~ "Variable",
+    ~ "Abbreviation",
+    ~ "Range Tested",
+    "Minimum node size",
+    "min_n",
+    "[2,10]",
+    "Number of randomly sampled predictors",
+    "mtry",
+    "[1,# of Predictors]",
+    "Number of trees",
+    "trees",
+    "[500,2000]"
+  ) %>% 
+  mutate(model = "Random forest (ranger)")
+
+grid_summary <- boost_tree_grid %>% 
+  bind_rows(rf_grid)
+
+
+kbl(grid_summary, caption = "Ranges of tuning parameters tested for machine learning models", booktabs = TRUE)
+
+
+
+```
+

@@ -1,9 +1,9 @@
 ---
 output: 
-  bookdown::word_document2:
-    reference_docx: template.docx
   bookdown::pdf_document2:
     keep_tex: true
+  bookdown::word_document2:
+    reference_docx: template.docx
 bibliography: "../references.bib"
 csl: canadian-journal-of-fisheries-and-aquatic-sciences.csl
 params: 
@@ -56,7 +56,7 @@ load(file = file.path(results_dir, "forecasts.RData"))
 
 ```
 
-```{r models}
+```{r models, include=FALSE}
 
 benchmarks <- system_performance %>% 
   filter(model == "fri" | model == "lag") %>% 
@@ -227,40 +227,27 @@ age_improv <- age_performance %>%
   summarise(srmse_improv = mean((srmse - fri) / fri))
 
 
+pearson_residuals <- age_system_forecast %>% 
+  group_by(model) %>% 
+  mutate(pearson_residual = (forecast - observed) / sd(forecast))
+  
+pearson_residuals %>% 
+  ggplot(aes(model, pearson_residual)) + 
+  geom_boxplot()
+
+pearson_residuals %>% 
+  ggplot(aes(pearson_residual, fill = model)) + 
+  geom_density(alpha = 0.25)
+
+
+system_r2 <- top_system_forecast %>% group_by(system) %>% yardstick::rsq(observed, forecast)
+
+age_r2 <- top_age_forecast %>% group_by(age_group) %>% yardstick::rsq(observed, forecast)
+
+ens_r2 <- top_ensemble_system_forecast %>% group_by(system) %>% yardstick::rsq(observed, forecast)
+  
+
 ```
-
-<!-- Assemble the parts of the manuscript in this order: title page, abstract (or introduction) on a new page, key words, text, acknowledgments, literature cited, tables (one table per page), figure legends (on separate page preceding the first figure), figures (one figure per page; label each figure, i.e., Figure 1, Figure 2, etc.), and lastly any Appendices. Please note that if your manuscript is accepted, the appendices would only be published online. -->
-
-
-<!-- Frame the lag-1 model as null hypothesis, steve munch, averages variance around every estimate has a lower prediction. ONe sentence thing saying that colinearity  -->
-
-<!-- Make clearer that the lag 1 is to find which model works best individually, and then from there how do we make an ensemble. Statistical comparison of lag 1 vs practical performance  -->
-
-<!-- Now let's focus in on the ensemble  -->
-
-<!-- Add a recipe to the methods section for what's happening here -->
-
-<!-- Add in comparison to FRI -->
-
-<!-- Add in the usual caveats about overfitting our purpose is  -->
-
-<!-- . At the same time there is a risk of overfitting, especially with the more modern methods, that is not addressed. What tools are available to extract insights of the fit from the more advanced method? You write some on that later in the paper, but perhaps hint on that already here?  -->
-
-
-<!-- Data table? SI -->
-
-<!-- Make clearer that the FRI has had a mix of models over that time period and that makes the comparison  -->
-
-<!-- even then things fall on their face. the message isn't this is the best. make clearer that this isn't a horserace  -->
-
-<!-- we've seen change in age structure, and point out that some of these models having done better at this.  -->
-
-<!-- take a crack at the climate thing  -->
-
-
-<!-- Modern computational tools such as dynamic linear modeling, machine learning and empirical dynamical modeling have fundamentally transformed many aspects of our society by providing previously impossible levels of predictive accuracy to tasks from digital advertising to weather forecasting. However, these methods are underutilized for predicting and managing natural resources and ecological systems. Forecasts of fish populations are an integral part of many management systems, and are often used by the fishing and processing sectors to make business plans. Almost all fish forecasts are currently based on population dynamics using estimates of birth rates and survival from recent years. Salmon are an ecological, cultural, and economic keystone of Alaska, and forecasts of salmon runs are used by fish processors to inform staffing and supply decisions, and even to determine whether to operate for the fishing fleets. These forecast are also used by harvesters to inform spatial effort allocation decisions and determine crew size. Although valuable, these predictions are challenging given the complex set of dynamic factors that affect numbers of returning salmon, from egg production to predation to the environmental drivers of salmon survival in marine and freshwater habitats. We utilize data from the salmon populations of Bristol Bay, Alaska, together with a suite of modern forecasting tools, to attempt to identify the frontiers in forecast accuracy possible given currently available data. By leveraging environmental data and correlations between distinct salmon populations, combinations of modern computational tools were able to reduce out-of-sample error by on average 12% for age-specific forecasts, and 19% for river-specific forecasts. Yet, there were some observations that were not accurately predicted by any method. Given the flexible nature and varying assumptions of our evaluated models, these isolated collective forecast failures help identify when forecast performance is limited by model specification versus the constraints imposed by the nature and quality of available data. Our results demonstrate the utility and limitations of modern computational tools for applied management of natural resources, even when confronted with the short time series and observation error common in ecological systems.  -->
-
-<!-- signal to noise in model selection -->
 
 \newpage
 
@@ -354,9 +341,9 @@ The general structure of our methods are as follows:
 
 We evaluated two different machine learning models: a random forest (rand\_forest, implemented through the `ranger` package [@wright2017] in R [@rcoreteam2020]), and boosted regression trees, boost\_tree, through the `xgboost` package [@chen2020]. A recurrent neural network implemented through `tensorflow` [@allaire2020] through the `keras` interface [@allaire2020a] was also tested but was found to perform poorly relative to the other methods and to be extremely computationally intensive, and as such was not included in the main analysis. Random forests are ensembles of regression trees, which make predictions by selecting nested splits of variables and mapping the mean level of the dependent variable at the terminal nodes of each tree. Boosted regression trees are similar to random forests, but have mechanisms in place that actively update the model to address data points that the model is struggling to fit [@elith2008]. For all machine learning methods, within a model fit the model selects splits/transformations/coefficients to minimize the root mean squared error (RMSE) of predictions for data withheld from the fitting process by the algorithm.
 
-Each of the machine learning methods had access to a variety of population and environmental data. We fit versions of each model separately for each age group in each major river system. Environmental datasets were queried from the NOAA ERDDAP portal using the rerddap package in R [@chamberlain2019]. Included environmental variables include sea surface temperature, sea level pressure, wind stress, and the Pacific Decadal Oscillation index. For each environmental variable, we use mean or median values within the Bristol Bay region across the months of May to August during the year in which the cohort being forecasted entered the ocean. We also included as candidate covariates natural origin returns of pink (*Oncorhynchus gorbuscha*) and chum (*Oncorhynchus keta*) across a range of North Pacific stocks, pulled from @ruggerone2018 (Table.\@ref(tab:dat)). 
+Each of the machine learning methods had access to a variety of population and environmental data. We fit versions of each model separately for each age group in each major river system. We tested versions of the models that fit the age groups and river systems simultaneously, but did not use this approach as it performed worse than the individual approach, likely due to our limited sample size. Environmental datasets were queried from the NOAA ERDDAP portal using the rerddap package in R [@chamberlain2019]. Included environmental variables include sea surface temperature, sea level pressure, wind stress, and the Pacific Decadal Oscillation index. For each environmental variable, we use mean or median values within the Bristol Bay region across the months of May to August during the year in which the cohort being forecasted entered the ocean. We also included as candidate covariates natural origin returns of pink (*Oncorhynchus gorbuscha*) and chum (*Oncorhynchus keta*) across a range of North Pacific stocks, pulled from @ruggerone2018 (Table.\@ref(tab:dat)). 
 
-When fitting models at the level of age groups by river system, data were first split into training and testing sets. We then split each of the training sets for performance testing (e.g. all data before the year 2000 if the year 2001 is to be forecasted) into a series of analysis and assessment splits for tuning purposes. Given the timeseries nature of the data, we generated these analysis and assessment splits in a rolling manner: for the first split, we used the first 70% of the training year to fit a model, and the remaining 30% to evaluate the performance of that model, followed by the first 75% and 25%, etc. These analysis and assessment splits were used to tune nuisance parameters common to all machine learning models, for example the minimum node size of fitted trees. We fit each of our assessment splits across a grid of potential parameter values, and selected the set of tuning parameters that minimized the RMSE of the predictions on the assessment splits (see computational environment available at <https://github.com/DanOvando/salmon-forecast-paper/> for detailed steps in this process).
+When fitting models at the level of age groups by river system, data were first split into training and testing sets. We then split each of the training sets for performance testing (e.g. all data before the year 2000 if the year 2001 is to be forecasted) into a series of analysis and assessment splits for tuning purposes. Given the timeseries nature of the data, we generated these analysis and assessment splits in a rolling manner: for the first split, we used the first 70% of the training year to fit a model, and the remaining 30% to evaluate the performance of that model, followed by the first 75% and 25%, etc. These analysis and assessment splits were used to tune nuisance parameters common to all machine learning models, for example the minimum node size of fitted trees (see Table S4 for complete list of tuning parameters). We fit each of our assessment splits across a grid of potential parameter values, and selected the set of tuning parameters that minimized the RMSE of the predictions on the assessment splits (see computational environment available at <https://github.com/DanOvando/salmon-forecast-paper/> for detailed steps in this process).
 
 Once the optimal set of tuning parameters for each training set were selected, we then fit the final model using all the training data with those tuned parameters, and used that model to predict the returns in the testing set. All relevant data transformations were prepared only on training / analysis splits (e.g. means and standard deviations for centering and scaling) and then applied to testing / assessment splits.
 
@@ -406,7 +393,7 @@ Both regression parameters are described by a random walk (i.e. $\alpha_t \sim N
 
 ## Empirical Dynamic Modeling {.unnumbered}
 
-Empirical dynamic modeling (EDM) is a nonparametric approach to characterize ecological dynamics and generate forecasts. The approach is predicated on Takens' theorem, which states that a single time series and a number of lags (dimension; E) are representative of overall system dynamics [@sugihara1990; @takens1981]. Applications of EDM have identified causal relationships in ecological systems [@sugihara2012] and improved forecast skill in Fraser River sockeye salmon [@ye2015]. See @munch2020 and @chang2017 for more general overviews of EDM. We used the software package rEDM [@park2020] for analysis.
+Empirical dynamic modeling (EDM) is a nonparametric approach to characterize ecological dynamics and generate forecasts. The approach is predicated on Takens' theorem, which states that a single time series and a number of lags (dimension; E) are representative of overall system dynamics [@sugihara1990; @takens1981]. Different types of EDM have identified causal relationships in ecological systems [@sugihara2012] and improved forecast skill in Fraser River sockeye salmon [@ye2015]. See @munch2020 and @chang2017 for more general overviews of EDM. We used the software package rEDM [@park2020] for our analysis.
 
 
 We focused on multiview embedding [@ye2016] to predict Bristol Bay sockeye returns. We predicted out-of-sample river and age-class-specific returns for 2000-2019. The idea behind multiview embedding is that there are potentially many valid reconstructions of system dynamics, and evaluating possible different combinations may improve performance. The top Multiview embedding was identified with river-specific data with a maximum E=2. Multiview embedding selects models based on the within-sample fits. So to predict say Kvichak 2.2 returns in the year 2000, we subset data through 1999 for Kvicahk 1.2, 1.3, 2.3, and 2.2, then selected the multiview embedding that had the highest within-sample predictive skill. We evaluated embeddings with maximum dimensions up to E=4, although this increase did not consistently result in improved within-sample predictive skill, perhaps due to noise in the data. 
@@ -431,7 +418,7 @@ $$SRMSE_m = \frac{RMSE_m}{RMSE_{l1}}$$
 
 MASE is commonly used to judge the accuracy of predictions derived from time series models, since it compares the error of a given model to the error expected by a simple model in which the predictions in a given time step are equal to the observed values in the last time step (a lag-1 model). We use SRMSE instead of MASE to reflect the use of the forecast. MASE considers an error of ten to be twice as bad as an error of five. In the context of salmon forecasting, our primary objective is to avoid massively over or under estimating the pre-season forecast. SRMSE penalizes large errors more than small errors, helping select models that avoid the kinds of large errors that are most problematic for the task of managing salmon populations.
 
-A SRMSE of one means that a model has predictive performance equal to that of the lag-1 model. A SRMSE greater than one indicates that a given model performs worse than the lag-1 benchmark, a SRMSE less than one that a model performs better than the lag-1 benchmark [@hyndman2006]. 
+A SRMSE of one means that a model has predictive performance equal to that of the lag-1 model. A SRMSE greater than one indicates that a given model performs worse than the lag-1 benchmark, a SRMSE less than one that a model performs better than the lag-1 benchmark [@hyndman2006]. We also calculated the predictive R^2^ for each of our relevant results. 
 
 <!-- Forecasts for a given year are produced by a model trained on data from all preceding years. This type of sliding-window cross-validation permitted the most realistic evaluation of retrospective model performance. -->
 
@@ -468,9 +455,9 @@ The FRI ensemble forecast values were pulled from the historic pre-season foreca
 
 ### River System Forecasts {.unnumbered}
 
-Management of Bristol Bay sockeye salmon operates at the river system level, with inseason fishery managers regulating allowable fishing effort on a daily basis to meet annual escapement goals for each river [@cunningham2019;@fried1988]. For each river system, we selected the individual model with the lowest SRMSE over the years 2000 to 2019 as the model of choice for that river system. On average the best-performing method reduced the SRMSE in pre-season run forecasts at the river system level by `r percent(comp_sys_improvement$imp_on_fri)`, with a minimum improvement of `r percent(comp_sys_improvement$min_imp_on_fri)` and a maximum of `r percent(comp_sys_improvement$max_imp_on_fri)`, relative to the performance of the historic published pre-season FRI forecasts. 
+Management of Bristol Bay sockeye salmon operates at the river system level, with inseason fishery managers regulating allowable fishing effort on a daily basis to meet annual escapement goals for each river [@cunningham2019;@fried1988]. For each river system, we selected the individual model with the lowest SRMSE over the years 2000 to 2019 as the model of choice for that river system. On average the best-performing method reduced the SRMSE in pre-season run forecasts at the river system level by `r percent(comp_sys_improvement$imp_on_fri)`, with a minimum improvement of `r percent(comp_sys_improvement$min_imp_on_fri)` and a maximum of `r percent(comp_sys_improvement$max_imp_on_fri)`, relative to the performance of the historic published pre-season FRI forecasts.
 
-River systems varied in both the lowest SRMSE achieved and in the model that produced the best performance. At least one model was able to out-perform or equal a simple lag-1 benchmark model in each of the river systems except for the Nushagak, with the `r  sys_performers$model[sys_performers$srmse == min(sys_performers$srmse)]` model achieving a SRMSE of `r prettyNum(min(sys_performers$srmse), digits = 2)` at the top end in the `r sys_performers$system[sys_performers$srmse == min(sys_performers$srmse)]` river system, and the `r sys_performers$model[sys_performers$srmse == max(sys_performers$srmse)]` model providing only marginal improvement over a lag-1 model with a SRMSE of `r prettyNum(max(sys_performers$srmse), digits = 2)` in the `r sys_performers$system[sys_performers$srmse == max(sys_performers$srmse)]` river system. The dlm, boost\_tree, and rand\_forest models were selected as the best performing candidate in at least one river system (Fig.\@ref(fig:sys-forecast)).
+River systems varied in both the lowest SRMSE achieved and in the model that produced the best performance. At least one model was able to out-perform or equal a simple lag-1 benchmark model in each of the river systems except for the Nushagak, with the `r  sys_performers$model[sys_performers$srmse == min(sys_performers$srmse)]` model achieving a SRMSE of `r prettyNum(min(sys_performers$srmse), digits = 2)` at the top end in the `r sys_performers$system[sys_performers$srmse == min(sys_performers$srmse)]` river system, and the `r sys_performers$model[sys_performers$srmse == max(sys_performers$srmse)]` model providing only marginal improvement over a lag-1 model with a SRMSE of `r prettyNum(max(sys_performers$srmse), digits = 2)` in the `r sys_performers$system[sys_performers$srmse == max(sys_performers$srmse)]` river system. The dlm, boost\_tree, and rand\_forest models were selected as the best performing candidate in at least one river system (Fig.\@ref(fig:sys-forecast)). R^2^ values at the system level ranged from a low of `r round(min(system_r2$.estimate),2)` in the `r system_r2$system[which.min(system_r2$.estimate)]` to a high of `r round(max(system_r2$.estimate),2)` in the `r system_r2$system[which.max(system_r2$.estimate)]`.
 
 ```{r sys-forecast, fig.cap="Observed (grey ribbons) and predicted (points) numbers of returning sockeye salmon to primary sockeye-producing river systems in Bristol Bay, Alaska. The color of the points corresponds to the best performing model in terms of scaled root mean squared error (SRMSE), point transparency reflects the SRMSE of the best performing model, noted in the top left corner of each panel."}
 system_forecast_figure
@@ -479,7 +466,7 @@ system_forecast_figure
 
 ### Age Group Forecasts {.unnumbered}
 
-While total river system returns are the primary metric of interest to the Bristol Bay sockeye fishery, the age composition of the returns are also important given their influence of the average size and therefore price for each salmon harvested, and options for processed product forms.  As such we also examined the ability of our tested models to generate predictions at the age group level. In retrospect different models performed best for each of the four age groups considered, and at least one model was able to improve substantially on a lag-1 model in all age groups (Fig.\@ref(fig:age-forecast)). 
+While total river system returns are the primary metric of interest to the Bristol Bay sockeye fishery, the age composition of the returns are also important given their influence of the average size and therefore price for each salmon harvested, and options for processed product forms.  As such we also examined the ability of our tested models to generate predictions at the age group level. In retrospect different models performed best for each of the four age groups considered, and at least one model was able to improve substantially on a lag-1 model in all age groups (Fig.\@ref(fig:age-forecast)).  R^2^ values at the age group level ranged from a low of `r round(min(age_r2$.estimate),2)` in the `r age_r2$age_group[which.min(age_r2$.estimate)]` age group to a high of `r round(max(age_r2$.estimate),2)` in the `r age_r2$age_group[which.max(age_r2$.estimate)]` age group.
 
 ```{r age-forecast, fig.cap="Observed (grey ribbons) and predicted (points) numbers of sockeye salmon within each age group returning to Bristol Bay, Alaska. Age group refers to 'years spent in freshwater'_'years spent in ocean'. Color corresponds to the best performing model in terms of scaled root mean squared error (SRMSE), transparency reflects the SRMSE of the best performing model, noted in the top left corner of each panel."}
 age_forecast_figure
@@ -496,7 +483,7 @@ age_system_return_plot
 <!-- The result that some models outperform others under specific circumstances (e.g. particular river systems or age classes) suggests a simple solution: pick the best model for the resolution of prediction required, or better yet create an ensemble model that can leverage the relative strengths of individual models into one improved forecast.  -->
 
 
-In theory the individual models tested here were capable of improving pre-season forecast accuracy over the years 2000-2019 when viewed retrospectively. However, scientists must make annual decisions as to which models to use and how to weigh their predictions. To approximate this process we selected the top performing (in terms of SRMSE) rolling ensemble model (either the FRI or the random forest model-of-models ensemble) for each of the main river systems. In `r comp_ens_sys_improvement$n_improv` of the `r n_distinct(system_forecast$system)` evaluated river systems the random forest ensemble produced the preferred ensemble, improving on the FRI forecast by on average `r percent(comp_ens_sys_improvement$improv_amnt)` ,  with the FRI forecasts being preferable of the two ensembles in the remaining `r n_distinct(system_forecast$system) - comp_ens_sys_improvement$n_improv`  river systems, outperforming the random forest ensemble by `r percent(-comp_ens_sys_improvement$worse_amnt)` . 
+In theory the individual models tested here were capable of improving pre-season forecast accuracy over the years 2000-2019 when viewed retrospectively. However, scientists must make annual decisions as to which models to use and how to weigh their predictions. To approximate this process we selected the top performing (in terms of SRMSE) rolling ensemble model (either the FRI or the random forest model-of-models ensemble) for each of the main river systems. In `r comp_ens_sys_improvement$n_improv` of the `r n_distinct(system_forecast$system)` evaluated river systems the random forest ensemble produced the preferred ensemble, improving on the FRI forecast by on average `r percent(comp_ens_sys_improvement$improv_amnt)` ,  with the FRI forecasts being preferable of the two ensembles in the remaining `r n_distinct(system_forecast$system) - comp_ens_sys_improvement$n_improv`  river systems, outperforming the random forest ensemble by `r percent(-comp_ens_sys_improvement$worse_amnt)` .  R^2^ values of the best ensemble model at the river sytem level ranged from a low of `r round(min(ens_r2$.estimate),2)` in the `r ens_r2$system[which.min(ens_r2$.estimate)]` age group to a high of `r round(max(ens_r2$.estimate),2)` in the `r ens_r2$system[which.max(ens_r2$.estimate)]` age group.
 
 
 ```{r ensemble-forecast, fig.cap="Performance of candidate ensemble models. Shape of points indicates which ensemble model had the lowest scaled root mean squared error (SRMSE). FRI refers to the published forecasts by the Fisheries Research Institute. The random forest ensemble is an ensemble model constructed by random forest made out of candidate model forecasts. The forecast from the best performing ensemble is plotted and denoted by point shape. Color of points shows the percent improvement of the ensemble model relative to the published FRI forecast."}
@@ -511,7 +498,9 @@ The underlying assumption of such an ensemble strategy is that the information n
 yearly_system_resid_struggles_figure
 ```
 
-Our residual analysis suggests that in some instances we simply may need to collect different data for inclusion in the forecast model if we hope to improve forecasts. For example, none of our models were able to predict the massive spike in returns of the 1.2 age class to the Wood river system in recent years (Fig.\@ref(fig:resids)), indicating that a signal of the process resulting in an increase in salmon survival was not among the suite of predictors explored. We can use the results of our most recent estimated boost\_tree model to examine the relative importance of different included data streams in improving forecast skill (Fig.\@ref(fig:imp-plot)). While these importance scores cannot be interpreted in the same manner as regression coefficients, they give us a sense of where we might look for new data to inform prediction. Across all river systems, prior returns in that system were an important predictor (and in many systems past returns in other river systems were also a useful predictor).
+Our residual analysis suggests that in some instances we simply may need to collect different data for inclusion in the forecast model if we hope to improve forecasts. For example, none of our models were able to predict the massive spike in returns of the 1.2 age class to the Wood river system in recent years (Fig.\@ref(fig:resids)), indicating that a signal of the process resulting in an increase in salmon survival was not among the suite of predictors explored. Conversely, all of the models performed reasonably well over most of the history of the Nushagak, except for the most recent years. This may be explained by the relative lack of variation in historic returns to the Nushagak prior to 2017, allowing both parametric and non-parametric models to perform equally well. 
+
+We can use the results of our most recent estimated boost\_tree model to examine the relative importance of different included data streams in improving forecast skill (Fig.\@ref(fig:imp-plot)). While these importance scores cannot be interpreted in the same manner as regression coefficients, they give us a sense of where we might look for new data to inform prediction. Across all river systems, prior returns in that system were an important predictor (and in many systems past returns in other river systems were also a useful predictor).
 
 ```{r imp-plot, eval = TRUE, fig.cap="Mean variable importance across all river systems of variables with importance scores greater than 0.075."}
 system_varimportance_figure
@@ -549,7 +538,8 @@ Using multiple types of highly flexible modern computational tools can provide i
 
 That forecasts for individual river systems can be improved by treating historic returns in other river systems as predictors, as evidenced by the machine learning models is an important finding. The historically used parametric salmon forecast methods have largely focused on relationships among age classes within single river systems in isolation. While perhaps not surprising given the juvenile salmon from multiple river systems enter the same area of the eastern Bering Sea during approximately the same season and likely experience similar survival conditions at ocean entry, this result suggests that sharing age-specific return abundance information among salmon stocks and river systems within Bristol Bay can inform and improve predictive performance.
 
-In addition to the return abundance of salmon from the home and neighboring river systems, we found that oceanographic variables including mean sea surface temperature and sea surface air pressure throughout the spatial and temporal range of the oceanic phase of these salmon were informative predictors for some river systems. In addition, as reported by @connors2020, in some instances the abundance of other salmon species (chum salmon, *Oncorhynchus keta*, in western Kamchatka and northern British Columbia, pink salmon, *Oncorhynchus gorbuscha*, in Prince William sound) proved important predictors of Bristol Bay salmon return abundance (Fig.\@ref(fig:imp-plot)). Improved data on at-sea conditions and interspecies competitors may facilitate improved forecasts in the future.
+In addition to the return abundance of salmon from the home and neighboring river systems, we found that oceanographic variables including mean sea surface temperature and sea surface air pressure throughout the spatial and temporal range of the oceanic phase of these salmon were informative predictors for some river systems. In addition, as reported by @connors2020, in some instances the abundance of other salmon species (chum salmon, *Oncorhynchus keta*, in western Kamchatka and northern British Columbia, pink salmon, *Oncorhynchus gorbuscha*, in Prince William sound) proved important predictors of Bristol Bay salmon return abundance (Fig.\@ref(fig:imp-plot)). Going forward, data on freshwater conditions, interspecies competitors, and the size structure of the salmon populations may prove useful in improving forecast accuracy. 
+
 
 Traditional preseason forecast methods for sockeye salmon returning to Bristol Bay and throughout Alaska have often assumed that relationships among age classes are static over time. However, there is increasing recognition of time-varying relationships between Alaskan salmon production and sea surface temperature [@litzow2018], and large-scale oceanographic processes including the Pacific Decadal Oscillation [@litzow2020;@litzow2020a]. Given evidence for the dynamic nature of salmon-climate relationships, it should not be surprising that salmon abundance forecast relationships should also exhibit temporal variability. While not informed by environmental data and only leveraging information from a single river system, the DLM approach was found to exhibit superior performance in several river systems and the 2.2 age class. It seems reasonable that the flexible nature of the DLM approach to capture time-varying dynamics in both average abundance and the ratio among age classes permits an indirect accounting for the dynamic salmon-environment processes that are increasingly recognized. 
 
