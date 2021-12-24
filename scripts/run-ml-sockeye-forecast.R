@@ -53,13 +53,13 @@ options(dplyr.summarise.inform = FALSE)
 
 # min_year <- 1963 # only include data greater than or equal this year
 
-fit_parsnip_models <- FALSE
+fit_parsnip_models <- TRUE
 
 fit_rnn_models <- FALSE
 
 run_query_erddap <-  TRUE
 
-run_next_forecast <- FALSE
+run_next_forecast <- TRUE
 
 by_system <- TRUE
 
@@ -1509,7 +1509,7 @@ raw_forecast_table <- next_forecast %>%
          age_group = dep_age) %>% 
   ungroup() %>% 
   mutate(
-    pred = pmax(0,pred),
+    forecast = pmax(0,forecast),
     age_group= forcats::fct_relevel(age_group, c("1.2","1.3","2.2","2.3"))) %>% 
   select(ret_yr, system, age_group, forecast, model_type) %>% 
   bind_rows(ml_forecast) %>% 

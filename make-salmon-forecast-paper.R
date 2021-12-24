@@ -13,11 +13,11 @@ purrr::walk(functions, ~ source(here::here("functions", .x)))
 return_table_year <- 2020
 
 prep_run(
-  results_name = "v1.1.0",
-  results_description = "draft publication with boost tree improvements loo starting in 1990",
+  results_name = "v1.1.0 Post 1980",
+  results_description = "only train post 1980",
   first_year = 1990,
   last_year = return_table_year,
-  min_year = 1963,
+  min_year = 1980,
   eval_year = 2000
 )
 
@@ -33,7 +33,7 @@ run_dlm_forecast <- FALSE
 
 run_ml_forecast <- FALSE
 
-fit_statistical_ensemble <- FALSE
+fit_statistical_ensemble <- TRUE
 
 run_importance <- TRUE
 

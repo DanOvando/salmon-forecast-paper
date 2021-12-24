@@ -65,7 +65,7 @@ unqs <- agedat %>% distinct(System, unq)
 # nmultiview = 5
 
 
-multiview_years <- function(maxE = 5, year_range = first_year:(last_year - 1), unq_inds = 1:6,
+multiview_years <- function(maxE = 5, year_range = min_year:(last_year - 1), unq_inds = 1:6,
                             nmultiview = 5){
   
   out <- vector('list', length = length(year_range))
@@ -131,14 +131,14 @@ multiview_years <- function(maxE = 5, year_range = first_year:(last_year - 1), u
 #------------------------------------------------------------------------------------
 #Try all values with dimension 2
 time1 <- Sys.time()
-all2 <- multiview_years(year_range = first_year:(last_year - 1), 
+all2 <- multiview_years(year_range = min_year:(last_year - 1), 
                       unq_inds=c(1:32), maxE = 2, nmultiview = 1)
 time2 <- Sys.time() - time1; time2
 
 
 
 time1 <- Sys.time()
-all21 <- multiview_years(year_range = first_year:(last_year - 1), 
+all21 <- multiview_years(year_range = min_year:(last_year - 1), 
                         unq_inds=c(33:36), maxE = 2, nmultiview = 1)
 time2 <- Sys.time() - time1; time2
 
