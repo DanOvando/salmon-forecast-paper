@@ -608,7 +608,7 @@ if (fit_parsnip_models == TRUE){
 
 
 # run recurrent neural nets -----------------------------------------------
-
+# DEPRECATED AS OF NOW
 if (fit_rnn_models == TRUE) {
   message("starting neural nets")
   rnn_experiments <- purrr::cross_df(
@@ -638,7 +638,7 @@ if (fit_rnn_models == TRUE) {
         list(dep_age = dep_age,
              engineering = engineering,
              delta_dep = delta_dep),
-        prepare_data,
+        prepare_rnn_data,
         test_year = first_year,
         data = data,
         shuffle = FALSE,
@@ -751,7 +751,7 @@ rnn_looframe <- looframe %>%
           delta_dep = delta_dep
         ),
         ages = "cohort",
-        prepare_data,
+        prepare_rnn_data,
         data = data,
         shuffle = FALSE,
         scalar = scalar,
