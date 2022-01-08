@@ -24,6 +24,7 @@ prep_run <- function(results_name,
   library(PNWColors)
   library(cowplot)
   library(magick)
+  library(ggtext)
 
   # for edm script
   

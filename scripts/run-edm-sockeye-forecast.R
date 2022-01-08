@@ -59,13 +59,13 @@ unqs <- agedat %>% distinct(System, unq)
 #------------------------------------------------------------------------------------
 #Multiview function
 #
-# maxE <- 5
+maxE <- 5
 # year_range <- 2000:2001
 # unq_inds = 1:6
 # nmultiview = 5
 
 
-multiview_years <- function(maxE = 5, year_range = first_year:(last_year - 1), unq_inds = 1:6,
+multiview_years <- function(maxE = 5, year_range = min_year:(last_year - 1), unq_inds = 1:6,
                             nmultiview = 5){
   
   out <- vector('list', length = length(year_range))
@@ -131,15 +131,15 @@ multiview_years <- function(maxE = 5, year_range = first_year:(last_year - 1), u
 #------------------------------------------------------------------------------------
 #Try all values with dimension 2
 time1 <- Sys.time()
-all2 <- multiview_years(year_range = first_year:(last_year - 1), 
-                      unq_inds=c(1:32), maxE = 2, nmultiview = 1)
+all2 <- multiview_years(year_range = min_year:(last_year - 1), 
+                      unq_inds=c(1:32), maxE = maxE, nmultiview = 1)
 time2 <- Sys.time() - time1; time2
 
 
 
 time1 <- Sys.time()
-all21 <- multiview_years(year_range = first_year:(last_year - 1), 
-                        unq_inds=c(33:36), maxE = 2, nmultiview = 1)
+all21 <- multiview_years(year_range = min_year:(last_year - 1), 
+                        unq_inds=c(33:36), maxE = maxE, nmultiview = 1)
 time2 <- Sys.time() - time1; time2
 
 
@@ -195,4 +195,4 @@ edm_model <- finalres %>%
 #   ggplot(aes(observed_returns, predicted_returns)) + 
 #   geom_point()
 
-readr::write_csv(edm_model, path = file.path(results_dir,'edm_loo_results.csv'))
+readr::write_csv(edm_model, path = file.path(results_dir,'edm_loo_results_5.csv'))

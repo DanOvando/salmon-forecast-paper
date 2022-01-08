@@ -14,7 +14,7 @@ return_table_year <- 2020
 
 prep_run(
   results_name = "v1.1.0",
-  results_description = "draft publication with boost tree improvements loo starting in 1990",
+  results_description = "only train post 1980",
   first_year = 1990,
   last_year = return_table_year,
   min_year = 1963,
@@ -37,7 +37,7 @@ fit_statistical_ensemble <- FALSE
 
 run_importance <- TRUE
 
-knit_manuscript <- TRUE
+knit_manuscript <- FALSE
 
 scalar <- 1000
 
@@ -157,6 +157,8 @@ forecasts <-
          forecast = predicted_returns,
          observed = observed_returns) %>%
   select(-observed) %>%
+  mutate(model = str_replace_all(model,"lag","lag(1)")) %>% 
+  mutate(model = str_replace_all(model,"multiview","edm")) %>% 
   bind_rows(published_forecasts) %>%
   left_join(observed_returns, by = c("system", "year" = "ret_yr", "age_group")) %>%
   filter(age_group %in% top_age_groups,!system %in% c("Alagnak", "Togiak", "Branch")) %>%
@@ -197,7 +199,7 @@ ensemble_dep_data <- forecasts %>%
   pivot_wider(names_from = "model_agegroup", values_from = "forecast")
 
 ensemble_data <- forecasts %>%
-  filter(model == "lag") %>%
+  filter(model == "lag(1)") %>%
   group_by(year, system) %>%
   summarise(observed = sum(observed) / scalar) %>%
   ungroup() %>%
@@ -544,7 +546,7 @@ rollfoo <- function(tmp,y){
   
   rolling_age_system_performance <- tmp %>%
     group_by(age_group, system) %>%
-    mutate(lag_mae = mean(abs(observed[model == "lag"] - forecast[model == "lag"]))) %>%
+    mutate(lag_mae = mean(abs(observed[model == "lag(1)"] - forecast[model == "lag(1)"]))) %>%
     group_by(age_group, system, model) %>%
     arrange(year) %>%
     summarise(
@@ -562,7 +564,7 @@ rollfoo <- function(tmp,y){
     ) %>%
     ungroup() %>%
     group_by(age_group, system) %>%
-    mutate(srmse = rmse / rmse[model == "lag"],
+    mutate(srmse = rmse / rmse[model == "lag(1)"],
            year = y) %>%
     ungroup()
   
@@ -657,7 +659,7 @@ frish_age_system_forecast <- frish_forecast %>%
 
 age_system_performance <- age_system_forecast %>%
   group_by(age_group, system) %>%
-  mutate(lag_mae = mean(abs(observed[model == "lag"] - forecast[model == "lag"]))) %>%
+  mutate(lag_mae = mean(abs(observed[model == "lag(1)"] - forecast[model == "lag(1)"]))) %>%
   group_by(age_group, system, model) %>%
   arrange(year) %>%
   summarise(
@@ -671,17 +673,18 @@ age_system_performance <- age_system_forecast %>%
       forecast = forecast,
       lag_mae = lag_mae
     ),
+    mpe = yardstick::mpe_vec(truth = observed, estimate = forecast),
     bias = mean(forecast - observed)
   ) %>%
   ungroup() %>%
   group_by(age_group, system) %>%
-  mutate(srmse = rmse / rmse[model == "lag"]) %>%
+  mutate(srmse = rmse / rmse[model == "lag(1)"]) %>%
   ungroup()
 
 
 total_performance <- total_forecast %>%
   ungroup() %>%
-  mutate(lag_mae = mean(abs(observed[model == "lag"] - forecast[model == "lag"]))) %>%
+  mutate(lag_mae = mean(abs(observed[model == "lag(1)"] - forecast[model == "lag(1)"]))) %>%
   group_by(model) %>%
   arrange(year) %>%
   summarise(
@@ -699,12 +702,12 @@ total_performance <- total_forecast %>%
   ) %>%
   ungroup() %>%
   arrange(mase) %>%
-  mutate(srmse = rmse / rmse[model == "lag"]) %>%
+  mutate(srmse = rmse / rmse[model == "lag(1)"]) %>%
   ungroup()
 
 system_performance <- system_forecast %>%
   group_by(system) %>%
-  mutate(lag_mae = mean(abs(observed[model == "lag"] - forecast[model == "lag"]))) %>%
+  mutate(lag_mae = mean(abs(observed[model == "lag(1)"] - forecast[model == "lag(1)"]))) %>%
   group_by(model, system) %>%
   summarise(
     rmse = yardstick::rmse_vec(truth = observed, estimate = forecast),
@@ -720,13 +723,13 @@ system_performance <- system_forecast %>%
   ungroup() %>%
   arrange(mase) %>%
   group_by(system) %>%
-  mutate(srmse = rmse / rmse[model == "lag"]) %>%
+  mutate(srmse = rmse / rmse[model == "lag(1)"]) %>%
   ungroup()
 
 
 age_performance <- age_forecast %>%
   group_by(age_group) %>%
-  mutate(lag_mae = mean(abs(observed[model == "lag"] - forecast[model == "lag"]))) %>%
+  mutate(lag_mae = mean(abs(observed[model == "lag(1)"] - forecast[model == "lag(1)"]))) %>%
   group_by(model, age_group) %>%
   summarise(
     rmse = yardstick::rmse_vec(truth = observed, estimate = forecast),
@@ -744,7 +747,7 @@ age_performance <- age_forecast %>%
   ungroup() %>%
   arrange(mase) %>%
   group_by(age_group) %>%
-  mutate(srmse = rmse / rmse[model == "lag"]) %>%
+  mutate(srmse = rmse / rmse[model == "lag(1)"]) %>%
   ungroup()
 
 
@@ -777,8 +780,8 @@ system_performance_plot
 
 # age_system_performance_plot <-  age_system_performance %>%
 #   group_by(age_group, system) %>%
-#   mutate(ml_improvement = (rmse[model == "lag"] - rmse[model == "boost_tree"]) /  rmse[model == "lag"],
-#          ref_rmse =rmse[model == "lag"],
+#   mutate(ml_improvement = (rmse[model == "lag(1)"] - rmse[model == "boost_tree"]) /  rmse[model == "lag(1)"],
+#          ref_rmse =rmse[model == "lag(1)"],
 #          sd_rmse = sd(rmse)) %>%
 #   filter(r2 == min(r2))  %>%
 #   ungroup() %>%
@@ -1070,7 +1073,8 @@ top_system_forecast <- system_forecast %>%
 system_forecast_srmse <- top_system_forecast %>%
   group_by(model, system) %>%
   summarise(max = max(observed, forecast),
-            srmse = unique(srmse))
+            srmse = unique(srmse),
+            r2 = yardstick::rsq_vec(observed, forecast))
 
 system_forecast_figure <- top_system_forecast %>%
   ggplot() +
@@ -1081,15 +1085,26 @@ system_forecast_figure <- top_system_forecast %>%
     size = 3,
     hjust = "left"
   ) +
+  geom_richtext(
+    data = system_forecast_srmse,
+    aes(2000, max * .9, label = glue::glue("R<sup>2</sup> = {round(r2,2)}")),
+    size = 3,
+    hjust = "left",
+    label.colour = "transparent",
+    fill = "transparent"
+  ) +
   geom_point(aes(year, forecast, fill = model, alpha = srmse),
              shape = 21,
              size = 2) +
-  facet_wrap( ~ system, scales = "free_y") +
+  facet_wrap(~ system, scales = "free_y") +
   fishualize::scale_fill_fish_d(name = '', option = "Trimma_lantana") +
   fishualize::scale_color_fish_d(name = '', option = "Trimma_lantana") +
-  scale_alpha_continuous(range = c(1, 0.25),
-                         name = "SRMSE",
-                         guide = FALSE) +
+  scale_alpha_continuous(
+    limits = c(0.4, 1),
+    range = c(1, .25),
+    name = "SRMSE",
+    guide = "none"
+  ) +
   scale_x_continuous(name = '') +
   scale_y_continuous(expand = expansion(c(0, .05)), name = "Returns (Millions of Salmon)")
 
@@ -1133,7 +1148,9 @@ top_age_forecast <- age_forecast %>%
 age_forecast_srmse <- top_age_forecast %>%
   group_by(model, age_group) %>%
   summarise(max = max(observed, forecast),
-            srmse = unique(srmse))
+            srmse = unique(srmse),
+            r2 = yardstick::rsq_vec(observed, forecast))
+
 
 age_forecast_figure <- top_age_forecast %>%
   # mutate(age_group = str_replace_all(age_group, "_",".")) %>%
@@ -1145,6 +1162,14 @@ age_forecast_figure <- top_age_forecast %>%
     size = 3,
     hjust = "left"
   ) +
+  geom_richtext(
+    data = age_forecast_srmse,
+    aes(2000, max * .9, label = glue::glue("R<sup>2</sup> = {round(r2,2)}")),
+    size = 3,
+    hjust = "left",
+    label.colour = "transparent",
+    fill = "transparent"
+  ) +
   geom_point(aes(year, forecast, fill = model, alpha = srmse),
              shape = 21,
              size = 2) +
@@ -1152,10 +1177,11 @@ age_forecast_figure <- top_age_forecast %>%
   fishualize::scale_fill_fish_d(name = '', option = "Trimma_lantana") +
   fishualize::scale_color_fish_d(name = '', option = "Trimma_lantana") +
   scale_alpha_continuous(
+    limits = c(0.4,1),
     range = c(1, 0.25),
     labels = percent,
     name = "SRMSE",
-    guide = FALSE
+    guide = "none"
   ) +
   scale_y_continuous(expand = expansion(c(0, .05)), name = "Returns (Millions of Salmon)") +
   scale_x_continuous(name = '')
@@ -1250,6 +1276,11 @@ top_ensemble_system_forecast <- system_forecast %>%
   filter(combo %in% top_ensemble$combo) %>%
   left_join(ensemble_performance, by = c("system", "model"))
 
+top_ensemble_system_forecast_summary <- top_ensemble_system_forecast %>% 
+  group_by(system) %>% 
+  summarise(r2 = yardstick::rsq_vec(observed, forecast),
+            max = max(observed, forecast))
+
 system_ensemble_forecast_figure <- top_ensemble_system_forecast %>%
   mutate(model = fct_recode(model, FRI = "fri",
          "Random Forest Ensemble" = "random_forest_ensemble")) %>% 
@@ -1260,6 +1291,14 @@ system_ensemble_forecast_figure <- top_ensemble_system_forecast %>%
     aes(year, forecast, shape = model, fill = ens_improvement),
     size = 2,
     alpha = 0.95
+  ) +
+  geom_richtext(
+    data = top_ensemble_system_forecast_summary,
+    aes(2000, max * 1.05, label = glue::glue("R<sup>2</sup> = {round(r2,2)}")),
+    size = 3,
+    hjust = "left",
+    label.colour = "transparent",
+    fill = "transparent"
   ) +
   scale_fill_gradient(
     low = "white",
@@ -1273,7 +1312,7 @@ system_ensemble_forecast_figure <- top_ensemble_system_forecast %>%
   # scale_alpha_continuous(range = c(1,0.25), name = "MASE") +
   scale_shape_manual(values = c(24, 21), name = '') +
   scale_x_continuous(name = '') +
-  scale_y_continuous(expand = expansion(c(0, .05)), name = "Returns (Millions of Salmon)") +
+  scale_y_continuous(expand = expansion(c(0, .1)), name = "Returns (Millions of Salmon)") +
   theme(legend.direction = "horizontal",
         legend.position = c(.7, .1)) +
   facet_wrap( ~ system, scales = "free_y")
@@ -1300,7 +1339,7 @@ run_makeup <- data %>%
 age_system_performance_figure <-  age_system_performance %>%
   group_by(age_group, system) %>%
   mutate(
-    ml_improvement = (rmse[model == "lag"] - rmse[model == "boost_tree"]) /  rmse[model == "lag"],
+    ml_improvement = (rmse[model == "lag(1)"] - rmse[model == "boost_tree"]) /  rmse[model == "lag(1)"],
     ref_rmse = rmse[model == "fri"],
     sd_rmse = sd(rmse)
   ) %>%
@@ -1339,7 +1378,7 @@ age_system_performance_figure
 
 
 srmse_summary_figure <- age_system_performance %>%
-  filter(model != "lag") %>%
+  filter(model != "lag(1)") %>%
   mutate(age_group = str_replace_all(age_group, "_",".")) %>%
   ggplot(aes(age_group, model, fill = srmse)) +
   geom_tile(color = "black") +
@@ -1362,7 +1401,31 @@ srmse_summary_figure <- age_system_performance %>%
     panel.spacing = unit(0, "lines")
   )
 
-srmse_summary_figure
+mpe_summary_figure <- age_system_performance %>%
+  filter(model != "lag(1)") %>%
+  mutate(age_group = str_replace_all(age_group, "_",".")) %>%
+  ggplot(aes(age_group, model, fill = bias)) +
+  geom_tile(color = "black") +
+  facet_grid( ~ system,
+              switch = "x", scales =
+                "free_x") +
+  scale_x_discrete(name = '') +
+  scale_y_discrete(name = '') +
+  scale_fill_gradient2(
+    high = "tomato",
+    low = "steelblue",
+    mid = "white",
+    midpoint = 0,
+    guide = guide_colorbar(frame.colour = "black", ticks.colour = "black"),
+    name = "Mean Bias (millions of fish)"
+  ) +
+  theme(
+    strip.placement = "outside",
+    strip.text = element_text(hjust = 0.5),
+    panel.spacing = unit(0, "lines")
+  )
+
+mpe_summary_figure
 
 # repeat but split in two time periods
 
@@ -1376,6 +1439,7 @@ age_system_performance_pre <- age_system_forecast %>%
     r2 = yardstick::rsq_vec(truth = observed, estimate = forecast),
     # ccc = yardstick::ccc_vec(truth = observed, estimate = forecast),
     mape = yardstick::mape_vec(truth = observed, estimate = forecast),
+    mpe = yardstick::mpe_vec(truth = observed, estimate = forecast),
     bias = mean(forecast - observed)
   ) %>%
   ungroup() %>%

@@ -1,4 +1,4 @@
-#' prepare data in wide format with feature engineering from training split
+#' prepare data in wide format with feature engineering from training split for use in recurrent neural network
 #'
 #' takes raw returns by age group and performs feature engineering and filtering
 #' to prepare data for model fitting. Note that due to different model types
@@ -21,10 +21,10 @@
 #'
 #' @examples
 #' \dontrun{
-#'check <- prepare_data(dep_age = "1.2", test_year = 2000, data = data)
+#'check <- prepare_rnn_data(dep_age = "1.2", test_year = 2000, data = data)
 #' }
 #'
-prepare_data <-
+prepare_rnn_data <-
   function(engineering = "yeo_johnson",
            ages = "all",
            delta_dep = FALSE,

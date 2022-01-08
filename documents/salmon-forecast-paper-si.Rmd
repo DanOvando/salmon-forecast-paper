@@ -1,5 +1,5 @@
 ---
-title: Improving Forecasts of Sockeye Salmon (*Oncorhynchus nerka*) with Modern Computational Tools.
+title: "Improving Forecasts of Sockeye Salmon (*Oncorhynchus nerka*) with Parametric and Non-Parametric Models"
 subtitle: Supporting Information
 author:
 - Daniel Ovando*
@@ -37,6 +37,9 @@ library(Cairo)
 library(extrafont)
 library(here)
 library(scales)
+library(knitr)
+library(kableExtra)
+library(ggridges)
 extrafont::loadfonts()
 
 results_dir <- here("results", params$results_name)
@@ -65,12 +68,12 @@ load(file = file.path(results_dir, "forecasts.RData"))
 ```{r models}
 
 benchmarks <- system_performance %>% 
-  filter(model == "fri" | model == "lag") %>% 
+  filter(model == "fri" | model == "lag(1)") %>% 
   select(model, system, rmse) %>% 
   pivot_wider(names_from = model, values_from = "rmse")
 
 age_benchmarks <- age_performance %>% 
-  filter(model == "fri" | model == "lag") %>% 
+  filter(model == "fri" | model == "lag(1)") %>% 
   select(model, age_group, rmse) %>% 
   pivot_wider(names_from = model, values_from = "rmse")
 
@@ -87,7 +90,7 @@ comp_sys_improvement <- sys_performers %>%
   summarise(imp_on_fri = -mean(rmse / fri - 1),
             min_imp_on_fri = min(-(rmse / fri - 1)),
             max_imp_on_fri = max(-(rmse / fri - 1)),
-            imp_on_lag =  -mean(rmse / lag - 1))
+            imp_on_lag =  -mean(rmse / `lag(1)` - 1))
 
 tmp <- sys_performers %>% 
   select(model, system, rmse) %>% 
@@ -96,7 +99,7 @@ tmp <- sys_performers %>%
   mutate(imp_on_fri = -(rmse / fri - 1),
             min_imp_on_fri = (-(rmse / fri - 1)),
             max_imp_on_fri = (-(rmse / fri - 1)),
-            imp_on_lag =  -(rmse / lag - 1))
+            imp_on_lag =  -(rmse / `lag(1)` - 1))
 
 age_performers <- age_performance %>% 
   filter(!model %in% c("fri", "boost_tree_ensemble")) %>% 
@@ -110,7 +113,7 @@ tmp2 <- age_performers %>%
   mutate(imp_on_fri = -(rmse / fri - 1),
             min_imp_on_fri = (-(rmse / fri - 1)),
             max_imp_on_fri = (-(rmse / fri - 1)),
-            imp_on_lag =  -(rmse / lag - 1))
+            imp_on_lag =  -(rmse / `lag(1)` - 1))
 
 a = tmp %>%
   ggplot(aes(reorder(system, -imp_on_fri), imp_on_fri, fill = model)) +
@@ -193,7 +196,7 @@ comp_sys_improvement <- sys_performers %>%
   summarise(imp_on_fri = -mean(rmse / fri - 1),
             min_imp_on_fri = min(-(rmse / fri - 1)),
             max_imp_on_fri = max(-(rmse / fri - 1)),
-            imp_on_lag =  -mean(rmse / lag - 1))
+            imp_on_lag =  -mean(rmse / `lag(1)` - 1))
 
 
 sys_improv <- system_performance %>% 
@@ -226,14 +229,205 @@ age_improv <- age_performance %>%
 
 \setcounter{table}{0}
 
-```{r srmse-fig, fig.cap="Scaled root mean squared error (SRMSE) for each model type (rows) by age group and system (columns).", fig.height=3}
+```{r srmse-fig, fig.cap="Scaled root mean squared error (SRMSE) for each model type (rows) by age group and system (columns). rand_forest refers to a random forest, fri to the Fisheries Research Institute historic forecast, edm to empirical dynamic modeling, dlm to dynamic linear model, boost_tree to boosted regression tree.", fig.height=6}
 srmse_summary_figure + 
   theme(axis.text.x = element_text(size = 6))
 ```
 
-```{r srmse-fig-two, fig.cap="Best performing model in terms of scaled root mean squared error (SRMSE) for each age group and river system. Color indicates the percent improvement in SRMSE between the best performing model and the historic published Fisheries Research Institute (FRI) forecasts."}
+\newpage
+
+```{r bias-fig, fig.cap="Mean bias (forecast - observed) in millions of fish by model, age group, and river system. rand_forest refers to a random forest, fri to the Fisheries Research Institute historic forecast, edm to empirical dynamic modeling, dlm to dynamic linear model, boost_tree to boosted regression tree.", fig.height=6}
+mpe_summary_figure + 
+  theme(axis.text.x = element_text(size = 6), legend.position = "top")
+```
+
+```{r srmse-fig-two, fig.cap="Best performing model in terms of scaled root mean squared error (SRMSE) for each age group and river system. Color indicates the percent improvement in SRMSE between the best performing model and the historic published Fisheries Research Institute (FRI) forecasts. rand_forest refers to a random forest, fri to the Fisheries Research Institute historic forecast, edm to empirical dynamic modeling, dlm to dynamic linear model, boost_tree to boosted regression tree."}
 age_system_performance_figure
 ```
+
+
+```{r btreefig, fig.cap="Observed and boosted regression tree forecasts of sockeye salmon returns by river system (columns) an age group (rows). Values in each panel are max scaled to demonstrate general correlation between observed and forecasted values."}
+age_system_forecast %>% 
+  filter(model == "boost_tree") %>% 
+  group_by(system, age_group) %>% 
+  mutate(observed = observed / max(observed),
+         forecast = forecast / max(forecast)) %>% 
+  ggplot(aes(observed, forecast, color = year)) + 
+  geom_abline(intercept = 0, slope = 1, linetype = 2) + 
+  geom_point() + 
+  geom_smooth(method = "lm", se = FALSE, color= "red", size = 1) +
+  facet_grid(age_group~system, scales = "free")  + 
+  theme(legend.position = "top") + 
+  scale_color_viridis_c(name= 'Year') + 
+  scale_x_continuous(breaks = c(0,1), labels = c("Min","Max"))+
+  scale_y_continuous(breaks = c(0,1), labels = c("Min","Max"))+
+  labs(x = "Observed", y = "Forecast", title = "Boosted regression tree")
+```
+
+
+
+
+```{r rffig, fig.cap="Observed and random forest forecasts of sockeye salmon returns by river system (columns) an age group (rows). Values in each panel are max scaled to demonstrate general correlation between observed and forecasted values."}
+age_system_forecast %>% 
+  filter(model == "rand_forest") %>% 
+  group_by(system, age_group) %>% 
+  mutate(observed = observed / max(observed),
+         forecast = forecast / max(forecast)) %>% 
+  ggplot(aes(observed, forecast, color = year)) + 
+  geom_abline(intercept = 0, slope = 1, linetype = 2) + 
+  geom_point() + 
+  geom_smooth(method = "lm", se = FALSE, color= "red", size = 1) +
+  facet_grid(age_group~system, scales = "free")  + 
+  theme(legend.position = "top") + 
+  scale_color_viridis_c(name= 'Year') + 
+  scale_x_continuous(breaks = c(0,1), labels = c("Min","Max"))+
+  scale_y_continuous(breaks = c(0,1), labels = c("Min","Max"))+
+  labs(x = "Observed", y = "Forecast", title = "Random forest")
+```
+
+
+```{r dlmfig, fig.cap="Observed and dynamic linear model forecasts of sockeye salmon returns by river system (columns) an age group (rows). Values in each panel are max scaled to demonstrate general correlation between observed and forecasted values."}
+age_system_forecast %>% 
+  filter(model == "dlm") %>% 
+  group_by(system, age_group) %>% 
+  mutate(observed = observed / max(observed),
+         forecast = forecast / max(forecast)) %>% 
+  ggplot(aes(observed, forecast, color = year)) + 
+  geom_abline(intercept = 0, slope = 1, linetype = 2) + 
+  geom_point() + 
+  geom_smooth(method = "lm", se = FALSE, color= "red", size = 1) +
+  facet_grid(age_group~system, scales = "free")  + 
+  theme(legend.position = "top") + 
+  scale_color_viridis_c(name= 'Year') + 
+  scale_x_continuous(breaks = c(0,1), labels = c("Min","Max"))+
+  scale_y_continuous(breaks = c(0,1), labels = c("Min","Max"))+
+  labs(x = "Observed", y = "Forecast", title = "Dynamic linear model")
+```
+
+
+```{r edmfig, fig.cap="Observed and empirical dynamic model forecasts of sockeye salmon returns by river system (columns) an age group (rows). Values in each panel are max scaled to demonstrate general correlation between observed and forecasted values."}
+age_system_forecast %>% 
+  filter(model == "edm") %>% 
+  group_by(system, age_group) %>% 
+  mutate(observed = observed / max(observed),
+         forecast = forecast / max(forecast)) %>% 
+  ggplot(aes(observed, forecast, color = year)) + 
+  geom_abline(intercept = 0, slope = 1, linetype = 2) + 
+  geom_point() + 
+  geom_smooth(method = "lm", se = FALSE, color= "red", size = 1) +
+  facet_grid(age_group~system, scales = "free")  + 
+  theme(legend.position = "top") + 
+  scale_color_viridis_c(name= 'Year') + 
+  scale_x_continuous(breaks = c(0,1), labels = c("Min","Max"))+
+  scale_y_continuous(breaks = c(0,1), labels = c("Min","Max"))+
+  labs(x = "Observed", y = "Forecast", title = "Empirical dynamic model")
+```
+
+
+```{r lagfig, fig.cap="Observed and lag(1) forecast of sockeye salmon returns by river system (columns) an age group (rows). Values in each panel are max scaled to demonstrate general correlation between observed and forecasted values."}
+age_system_forecast %>% 
+  filter(model == "lag(1)") %>% 
+  group_by(system, age_group) %>% 
+  mutate(observed = observed / max(observed),
+         forecast = forecast / max(forecast)) %>% 
+  ggplot(aes(observed, forecast, color = year)) + 
+  geom_abline(intercept = 0, slope = 1, linetype = 2) + 
+  geom_point() + 
+  geom_smooth(method = "lm", se = FALSE, color= "red", size = 1) +
+  facet_grid(age_group~system, scales = "free")  + 
+  theme(legend.position = "top") + 
+  scale_color_viridis_c(name= 'Year') + 
+  scale_x_continuous(breaks = c(0,1), labels = c("Min","Max"))+
+  scale_y_continuous(breaks = c(0,1), labels = c("Min","Max"))+
+  labs(x = "Observed", y = "Forecast", title = "Lag(1)")
+```
+
+\newpage
+
+
+```{r retfig, fig.cap="Trends in returns of sockeye salmon to Bristol Bay river systems (columns) over time (x-axis) by age group (rows)"}
+age_system_forecast %>% 
+    filter(model == "lag(1)") %>% 
+  group_by(age_group, system) %>% 
+  mutate(ret = observed / max(observed)) %>% 
+  ggplot(aes(year, ret)) + 
+  geom_line() +
+  facet_grid(age_group ~ system, scales = "free_y") + 
+  theme_minimal_grid() +
+  scale_x_continuous(guide = guide_axis(n.dodge = 2), name = "Returns") +
+  scale_y_continuous(breaks = c(0,1), labels = c("Min","Max"), name = 'Year') +
+  theme(axis.text.x = element_text(size = 6))
+```
+
+\newpage
+
+```{r pearson, fig.cap="Distribution of Pearson's residuals by model type for forecasts at the resolution of returns by age group and river system by year"}
+
+pearson_residuals <- age_system_forecast %>% 
+  group_by(model) %>% 
+  mutate(pearson_residual = (forecast - observed) / sd(forecast))
+  
+
+pearson_residuals_model <- pearson_residuals %>% 
+  mutate(model = fct_relevel(model,"lag(1)"),
+         pearson_residual = pmax(-2.5,pmin(pearson_residual,2.5))) %>% 
+  filter(model != "fri")
+
+pearson_residuals <- age_system_forecast %>% 
+  group_by(model) %>% 
+  mutate(pearson_residual = (forecast - observed) / sd(forecast))
+  
+
+# pearson_residuals_model %>% 
+#   group_by(model) %>% 
+#   summarise(cv = sd(pearson_residual),
+#             mean = mean(pearson_residual))
+
+pearson_residuals_model %>% 
+  ggplot(aes(x = pearson_residual, y = model)) + 
+  geom_vline(aes(xintercept = 0), linetype = 2) +
+  geom_density_ridges(aes(fill = model),show.legend = FALSE,alpha = 0.9) + 
+  scale_x_continuous(name = "Pearson's residsuals") + 
+  scale_y_discrete(name = '')
+
+
+
+```
+
+
+\newpage
+
+
+
+
+```{r abspearson, fig.cap="Difference in absolute Pearson residuals across model types (mean and 95% confidence intervals) relative to the lag(1) model. Results indicate no significant (p<0.05) differences in the absolute values of the pearson residuals across model types."}
+
+pearson_residuals <- pearson_residuals %>% 
+  mutate(abs_pearson_residual = abs(pearson_residual)) %>% 
+   mutate(model = fct_relevel(model,"lag(1)")) %>% 
+   filter(model != "fri")
+
+abs_pearson_resid_model <- lm(abs_pearson_residual ~ model, data = pearson_residuals)
+
+foo <- function(x){
+  str_remove_all(x, "model")
+}
+
+modelsummary::modelplot(abs_pearson_resid_model, coef_rename = foo) + 
+  scale_y_discrete(name = "Model")
+
+```
+
+
+\newpage
+
+
+```{r edmfun, fig.cap="Within-sample prediction (measured as correlation coefficient between observations and predictions) from data up to 2000. The largest increase in correlation is seen in Nushagak, where the coefficients with embedding dimensions (E)=4 are about 0.25 greater than the coefficients with E=2. However, the out-of-sample forecast skill for Nushagak was lower with E=4 than with E=2. We feel E=2 is a parsimonious approach that results in simpler, lower dimensional models applied to all systems.", out.width="75%", fig.align="center"}
+knitr::include_graphics(here("documents","images", "embedding.png"))
+```
+
+
+\newpage
 
 +-----------------------------------+-----------------------------------------------------------------------------------------------+-------------------------------------------------------+
 | Data Type                         | Description                                                                                   | Dataset ID                                            |
@@ -258,17 +452,79 @@ age_system_performance_figure
 +----------------------------------------+-------------------------------------------------------------------------------+
 | Random Forest (rand\_forest)           | An ensemble of regression trees                                               |
 +----------------------------------------+-------------------------------------------------------------------------------+
-| Recurrent Neural Network (rnn)         | A neural network with a memory component implemented through recurrent layers |
-+----------------------------------------+-------------------------------------------------------------------------------+
 | Dynamic Linear Model (dlm)             | Sibling regression with dynamic components                                    |
 +----------------------------------------+-------------------------------------------------------------------------------+
 | Empirical Dynamic Modeling  (multiview)| Simplex projection based on lagged values                                     |
 +----------------------------------------+-------------------------------------------------------------------------------+
-| Lag-1                       | Forecast next year equal to observed returns last year                        |
+| Lag(1)                                 | Forecast next year equal to observed returns last year                        |
 +----------------------------------------+-------------------------------------------------------------------------------+
-| Ensemble                               | A random forest ensemble made of other candidate models             |
+| Ensemble                               | A random forest ensemble made of other candidate models                       |
 +----------------------------------------+-------------------------------------------------------------------------------+
 |                                        |                                                                               |
 +----------------------------------------+-------------------------------------------------------------------------------+
 
 : (\#tab:models) Candidate forecasting models evaluated
+
+
+
+\newpage
+
+
+```{r tuning-table, results="asis"}
+
+
+boost_tree_grid <-
+  tribble(
+    ~ "Variable",
+    ~ "Abbreviation",
+    ~ "Range Tested",
+    "Minimum node size",
+    "min_n",
+    "[2,10]",
+    "Maximum tree depth",
+    "tree_depth",
+    "[2,15]",
+    "Learning rate",
+    "learn_rate",
+    "[0.05,0.6]",
+    "Number of randomly sampled predictors",
+    "mtry",
+    "[1,# of Predictors]",
+    "Loss reduction for further splitting",
+    "loss_reduction",
+    "[1e-15,2]",
+    "Number of trees",
+    "trees",
+    "[500,2000]"
+  ) %>% 
+  mutate(model = "Boosted Regression Tree (xgboost)")
+
+
+
+rf_grid <-
+  tribble(
+    ~ "Variable",
+    ~ "Abbreviation",
+    ~ "Range Tested",
+    "Minimum node size",
+    "min_n",
+    "[2,10]",
+    "Number of randomly sampled predictors",
+    "mtry",
+    "[1,# of Predictors]",
+    "Number of trees",
+    "trees",
+    "[500,2000]"
+  ) %>% 
+  mutate(model = "Random forest (ranger)")
+
+grid_summary <- boost_tree_grid %>% 
+  bind_rows(rf_grid)
+
+
+kbl(grid_summary, caption = "Ranges of tuning parameters tested for machine learning models", booktabs = TRUE)
+
+
+
+```
+
