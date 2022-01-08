@@ -1,5 +1,5 @@
 ---
-title: Improving Forecasts of Sockeye Salmon (*Oncorhynchus nerka*) with Modern Computational Tools.
+title: "Improving Forecasts of Sockeye Salmon (*Oncorhynchus nerka*) with Parametric and Non-Parametric Models"
 subtitle: Supporting Information
 author:
 - Daniel Ovando*
@@ -399,6 +399,36 @@ pearson_residuals_model %>%
 
 
 
+
+```{r abspearson, fig.cap="Difference in absolute Pearson residuals across model types (mean and 95% confidence intervals) relative to the lag(1) model. Results indicate no significant (p<0.05) differences in the absolute values of the pearson residuals across model types."}
+
+pearson_residuals <- pearson_residuals %>% 
+  mutate(abs_pearson_residual = abs(pearson_residual)) %>% 
+   mutate(model = fct_relevel(model,"lag(1)")) %>% 
+   filter(model != "fri")
+
+abs_pearson_resid_model <- lm(abs_pearson_residual ~ model, data = pearson_residuals)
+
+foo <- function(x){
+  str_remove_all(x, "model")
+}
+
+modelsummary::modelplot(abs_pearson_resid_model, coef_rename = foo) + 
+  scale_y_discrete(name = "Model")
+
+```
+
+
+\newpage
+
+
+```{r edmfun, fig.cap="Within-sample prediction (measured as correlation coefficient between observations and predictions) from data up to 2000. The largest increase in correlation is seen in Nushagak, where the coefficients with embedding dimensions (E)=4 are about 0.25 greater than the coefficients with E=2. However, the out-of-sample forecast skill for Nushagak was lower with E=4 than with E=2. We feel E=2 is a parsimonious approach that results in simpler, lower dimensional models applied to all systems.", out.width="75%", fig.align="center"}
+knitr::include_graphics(here("documents","images", "embedding.png"))
+```
+
+
+\newpage
+
 +-----------------------------------+-----------------------------------------------------------------------------------------------+-------------------------------------------------------+
 | Data Type                         | Description                                                                                   | Dataset ID                                            |
 +===================================+===============================================================================================+=======================================================+
@@ -426,9 +456,9 @@ pearson_residuals_model %>%
 +----------------------------------------+-------------------------------------------------------------------------------+
 | Empirical Dynamic Modeling  (multiview)| Simplex projection based on lagged values                                     |
 +----------------------------------------+-------------------------------------------------------------------------------+
-| Lag(1)                       | Forecast next year equal to observed returns last year                        |
+| Lag(1)                                 | Forecast next year equal to observed returns last year                        |
 +----------------------------------------+-------------------------------------------------------------------------------+
-| Ensemble                               | A random forest ensemble made of other candidate models             |
+| Ensemble                               | A random forest ensemble made of other candidate models                       |
 +----------------------------------------+-------------------------------------------------------------------------------+
 |                                        |                                                                               |
 +----------------------------------------+-------------------------------------------------------------------------------+
