@@ -17,7 +17,7 @@ prep_run <- function(results_name,
   library(furrr)
   library(ggsci)
   library(ggrepel)
-  library(gt)
+  # library(gt)
   library(tensorflow)
   library(patchwork)
   library(fishualize)
